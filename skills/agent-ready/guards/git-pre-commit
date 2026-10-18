@@ -1,0 +1,3 @@
+#!/bin/sh
+# agent-ready: stop commits that add secret files or real-looking keys.
+node .agents/hooks/precommit-guard.mjs || exit 1

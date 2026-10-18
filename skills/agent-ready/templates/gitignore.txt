@@ -1,0 +1,33 @@
+# Secrets: never commit these (added by agent-ready)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.dev.vars
+secrets.toml
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+serviceAccount*.json
+*firebase-adminsdk*.json
+client_secret*.json
+*.tfstate
+*.tfstate.backup
+
+# Personal agent settings (shared settings are committed, personal ones are not)
+.claude/settings.local.json
+
+# Agent tools: the board's claims (kept inside .git when this is a git repo)
+# and worktrees made inside the project folder
+.agents/claims.json
+.agents/claims.json.lock
+.worktrees/

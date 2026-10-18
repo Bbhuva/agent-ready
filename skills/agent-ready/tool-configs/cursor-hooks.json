@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeReadFile": [
+      {
+        "command": "node .agents/hooks/guard.mjs"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "node .agents/hooks/guard.mjs"
+      }
+    ]
+  }
+}

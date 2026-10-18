@@ -1,0 +1,6 @@
+{
+  "_about": "Settings for node .agents/scripts/board.mjs. checks: the item-done commands from Commands in AGENTS.md; merge runs them on the builder's branch and again on the main branch. maxBuilders: how many builders work at once. Leave worktreeDir out to use ../<project>-worktrees.",
+  "mainBranch": "main",
+  "maxBuilders": 3,
+  "checks": []
+}
