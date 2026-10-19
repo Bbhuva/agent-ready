@@ -76,7 +76,7 @@ Skip shaping only for small fixes, or when the operator says to.
 ## The loop
 
 1. **Pick** the first item `board.mjs ready` lists.
-2. **Claim** it: `node .agents/scripts/board.mjs claim <id> --agent <your name>`, then mark it `[~]` with the `**Claimed:**` line. One claim per agent at a time. (In parallel mode the coordinator does both.)
+2. **Claim** it: `node .agents/scripts/board.mjs claim <id> --agent <your name>`, then mark it `[~]` with the `**Claimed:**` line. If the board lists **paused** work, pick that up first with `resume` (see below) rather than starting something new. One claim per agent at a time. (In parallel mode the coordinator does both.)
 3. **Plan** in 3 to 8 bullets: what changes, which files, any new dependency and why. If you will touch files outside `Touches`, release, update `Touches`, and claim again.
 4. **Build** in small steps, following the patterns already in the repo. Code goes where the Map in `AGENTS.md` says, never in `docs/`. Name things with the words in `docs/words.md`. Don't tidy code outside the item; add a chore to the backlog instead.
 5. **Check** it as `docs/rules/testing.md` says.
@@ -105,10 +105,11 @@ Skip shaping only for small fixes, or when the operator says to.
 
 ## Blocked, stale and deadlocked work
 
-- **Blocked?** Mark the item `[!]` with the `**Blocked:**` line, release it, and pick the next ready item. Never sit on a claim while you wait.
+- **Blocked?** Mark the item `[!]` with the `**Blocked:**` line, release it, and pick the next ready item. Never sit on a claim while you wait. A released `[~]` or `[!]` item shows on the board as **paused**: its partial work stays where it is and still holds its files.
+- **Picking up paused work:** `node .agents/scripts/board.mjs resume <id> --agent <your name>`. Read its handoff first (the board names it). It keeps the item's ID, its branch or worktree and its partial work, and records you as the new holder. Resume your own claim the same way after a new session.
 - **Waiting on the operator?** Add an `op-` entry to `docs/operator/todo.md` with exact steps, add its ID to the item's `Depends`, and carry on with something else.
 - **No ready item left?** Stop. Write a handoff listing what is blocked and on whom, and tell the operator.
-- **Stale claims:** the board flags a claim with no progress for more than a day. Look at the work, write a handoff if there is any, then release it. Never take over a fresh claim: ask the operator or the other agent.
+- **Stale claims:** the board flags a claim with no progress for more than a day. Look at the work, write a handoff if there is none, then take it over with `resume <id> --agent <your name> --take-over`. A fresh claim by someone else is never taken: `resume` refuses it. Ask the operator or the other agent; only they should release it.
 - **No deadlocks:** hold one claim at a time, and never wait while holding it. If two agents still need each other's items, both release, and the item with the lower ID goes first.
 - **Shared checkout:** stage only the files you changed. Never revert, reformat or delete another agent's work in progress.
 
@@ -120,8 +121,17 @@ Long chats cost more and make agents worse: old detail crowds out what matters n
 - **Write a handoff before you stop** partway, so the next session starts from the note instead of the whole chat.
 - **Point to files, don't paste them.** Give a path and the lines that matter, not a whole log or file in the chat.
 - **Read only what the task needs.** Search first, then open the part you need (the table in `AGENTS.md` says which doc for which job).
-- **Use a cheaper model for mechanical work** (renames, moving files, writing boilerplate) if the tool lets you choose, and the strongest one for planning and reviews.
+- **Match the model to the work.** Use the guidance below; the operator should not need to learn model names or reasoning labels before starting.
 - If a session drags on or keeps going in circles, stop, write a handoff, and tell the operator to start fresh.
+
+## Models and thinking settings
+
+- **Start with what the person has.** For a small, clear, low-risk item, start with the current model and settings. Keep the item bounded and check the result. Do not promise that every model can complete every task.
+- **Recommend a change when it matters.** For unclear requirements, architecture, changes involving sign-in, permissions, payments or data loss, difficult debugging, or an important review, consider a more capable available model or more reasoning. Explain the reason in one sentence. First check whether missing information or an unclear task is the real problem. Repeated failure on a clear task is another reason to reconsider the model, rather than repeat the same attempt.
+- **Use the options actually available.** Check the tool's visible model list, configuration or current official documentation; do not invent a model name, price or supported setting. If you cannot see the options, say so and ask for the names shown in the picker only when a change would help. Respect the person's budget and explicit model choice.
+- **Explain the labels only when needed.** A model is the AI doing the work. A reasoning setting controls how much effort a supported model spends working through it. Labels such as high or xhigh are tool-specific; more effort can take longer and use more allowance. Do not make the highest setting the default for everything.
+- **Be honest about switching.** These files guide the agent; they do not themselves switch the active model. Change a setting only through a supported control, within the person's authorisation, and verify it took effect. If you cannot change it, give the person the exact short step for their tool and write a handoff when a fresh session is needed. Never claim a switch happened just because you recommended one.
+- **Record and verify.** Log an agreed standing preference in the operator overrides, with task-specific choices in decisions or the handoff. Keep the same acceptance checks when using a lighter model. Call cost or quality improvements measured only after comparing results.
 
 ## Changes of plan
 
@@ -131,7 +141,7 @@ Long chats cost more and make agents worse: old detail crowds out what matters n
 
 ## Handoffs
 
-When you stop partway, finish a batch, or the operator asks: copy `docs/build/templates/handoff.md` to `docs/build/handoffs/<date>-<topic>.md` (or `<id>.md` for one item) and fill it in. Once the work it describes is done, move it to `docs/archive/`.
+When you stop partway, finish a batch, or the operator asks: copy `docs/build/templates/handoff.md` to `docs/build/handoffs/<date>-<topic>.md` (or `<id>.md` for one item) and fill it in, naming the item IDs. Then release your claims, leaving the items marked `[~]`, so the next agent can pick them up with `resume`. Once the work it describes is done, move the note to `docs/archive/`.
 
 ## End of a phase
 

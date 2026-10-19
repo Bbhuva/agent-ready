@@ -21,7 +21,9 @@ This project uses: **{{MODE: one agent, taking turns, or parallel}}**.
 | `board.mjs` | Ready, in progress, waiting, the operator's open to-dos, problems |
 | `board.mjs ready` | Items that can be started right now |
 | `board.mjs claim <id> --agent <name>` | Takes an item, or says exactly why not |
-| `board.mjs release <id>` | Gives it back |
+| `board.mjs resume <id> --agent <name>` | Picks up paused work (stopped partway and released), keeping its ID, branch, worktree and partial work. Add `--take-over` for a stale claim; a fresh claim by someone else is refused |
+| `board.mjs release <id>` | Gives it back. An item left marked `[~]` or `[!]` then shows as paused |
+| `board.mjs undo <id>` | Shows which save points it would reverse; add `--yes` to do it. A merge is reversed once, against its first parent, never its builder's commits again |
 | `board.mjs check` | Fails on duplicate IDs, unknown or circular dependencies, dependencies inside one iteration, and overlapping work in progress |
 | `board.mjs graph` | Writes `docs/build/graph.md`: a picture of the dependencies, and who touches which files |
 | `board.mjs next` | Parallel mode: the batch of ready items to start now, none touching the same files |
@@ -30,7 +32,12 @@ This project uses: **{{MODE: one agent, taking turns, or parallel}}**.
 
 If the board refuses a claim, do not work around it. Pick another item, or ask the coordinator.
 
-**The guard backs the board up.** When an item is claimed, the guard refuses any agent writing into its files from another checkout, and refuses a builder writing outside its own item's files (its report in `docs/build/handoffs/` is always allowed). It sees file writes in Claude Code, Codex, Gemini CLI, Antigravity and OpenCode. Cursor has no hook before a file edit, so there only the board and these rules apply.
+**What keeps builders apart, and how far each part goes:**
+
+- **Separate worktrees do the real isolating.** A builder's changes only reach the main branch through `merge`, after the checks.
+- **The board** refuses to hand out an item whose `Touches` overlap work in progress.
+- **The guard** refuses an agent writing into another checkout's claimed files, and a builder writing outside its own item's files (its report in `docs/build/handoffs/` is always allowed). It checks structured edits (write and edit tools, patches) and shell commands that name the file they write: redirects (`>`, `>>`), `tee`, `cp`, `mv`, `rm`, `touch`, `sed -i`, PowerShell's `Set-Content`, `Add-Content`, `Out-File`, `New-Item` and `Remove-Item`, `git rm`, `git mv`, `git restore`, including inside `bash -c` or `pwsh -Command`.
+- **What the guard cannot see:** files written by scripts, interpreters (`node -e`, `python -c`), package managers, build tools or anything else that doesn't name the file in the command. It reads command text, so it narrows the common cases; it does not isolate. Cursor has no hook before a file edit, so in Cursor only the shell check, the board and these rules apply.
 
 Settings live in `.agents/board.json`: the main branch, where worktrees go, how many builders at once, and `checks`, the item-done commands that `merge` runs.
 
@@ -69,17 +76,20 @@ For each branch, run `node .agents/scripts/board.mjs merge <id>` in the main che
 1. rebases the branch onto the main branch in its worktree. On a conflict it stops, changes nothing, and names the files: send the branch back to its builder;
 2. runs the `checks` from `.agents/board.json` on the branch. If one fails, it stops and shows the output: back to the builder;
 3. merges with `--no-ff`, and ticks the item with a Done line in the same commit, which becomes the save point;
-4. runs the checks again on the main branch. If they fail, it undoes the merge with `git revert` (a new commit, nothing lost), keeps the claim, and says so: back to the builder;
+4. runs the checks again on the main branch. If they fail, it undoes the merge with `git revert` (a new commit, nothing lost) and checks that the main branch is back exactly as it was. Then it puts the item back in progress for its builder, keeps the claim and worktree, and notes the undone merge on the item: back to the builder. The next `merge` of that item brings back everything from the undone merge, not just the fix, by reversing the undo on the item's branch first, even if the builder rebased onto main in between. It does this once, and only for that item's own last merge: other items' merges, and an item that was undone on purpose and built again, bring nothing back. If the undo itself fails (for example because the checks changed files), it says so plainly. The merge stays in place, the item is marked blocked `[!]` rather than done, and the claim, worktree and changed files are kept for you to sort out;
 5. releases the claim, removes the worktree, and deletes the merged branch.
 
 Then copy the notes from the builder's report (`docs/build/handoffs/<id>.md`) into the shared files: decisions, learnings, the changelog line, manual checks and operator to-dos. When the batch is done, run `board.mjs graph` so the picture is current.
 
-Doing it by hand instead? The steps are the same: `git rebase main` in the worktree, the checks, `git merge --no-ff agent/<id>` in the main checkout, the checks again (`git revert -m 1 HEAD` if they fail), then `release`, `git worktree remove` and `git branch -d`. Never force anything.
+Doing it by hand instead? The steps are the same: `git rebase main` in the worktree, the checks, `git merge --no-ff agent/<id>` in the main checkout, the checks again (`git revert -m 1 HEAD` if they fail, then check it worked), then `release`, `git worktree remove` and `git branch -d`. Never force anything. After undoing a merge by hand, bring the work back onto the branch before merging it again, or git will leave the original work out. In the worktree: `git checkout --detach main`, `git revert --no-edit <the commit that undid the merge>`, then `git rebase --onto HEAD main agent/<id>`.
+
+To undo an item after it is merged, use `node .agents/scripts/board.mjs undo <id>`, as `docs/rules/git.md` says.
 
 Pushing and deploying stay with the operator, as `docs/rules/git.md` says.
 
 ## Keeping it tidy
 
 - `git worktree list` shows every worktree. Remove the ones whose branch is merged. Ask the operator before removing one with unmerged work.
-- The board flags claims older than a day. Look in that worktree: if there is work, write a handoff for it, then release the claim.
+- The board flags claims older than a day. Look in that worktree: if there is work, write a handoff for it. Then a new builder takes it over with `resume <id> --agent <name> --take-over`, keeping the same worktree and branch.
+- A builder that stops partway releases its claim and leaves the item `[~]`. The board then lists it as paused, and the next builder picks it up with `resume`.
 - Builder reports for merged items move to `docs/archive/` at the end of the phase.

@@ -11,7 +11,9 @@
 //   node .agents/scripts/board.mjs                          ready, in progress, waiting, problems
 //   node .agents/scripts/board.mjs ready                    items that can be started now
 //   node .agents/scripts/board.mjs claim <id> --agent <name>
+//   node .agents/scripts/board.mjs resume <id> --agent <name> [--take-over]   pick up work someone stopped partway
 //   node .agents/scripts/board.mjs release <id>
+//   node .agents/scripts/board.mjs undo <id> [--yes]           go back to before an item's save points
 //   node .agents/scripts/board.mjs check                    exit code 1 if the plans have problems
 //   node .agents/scripts/board.mjs graph                    write docs/build/graph.md (Mermaid)
 //
@@ -266,12 +268,23 @@ export function activeWork(board) {
   const active = new Map();
   for (const item of board.items) {
     // "**Claimed:** codex-1, 2026-10-17 10:00, <worktree>": the name comes first.
-    if (item.status === "doing") active.set(item.id, { id: item.id, agent: item.claimed.split(",")[0].trim() || "someone", at: null, touches: item.touches, where: null });
+    // Marked [~] with no claim on the board means paused: someone stopped
+    // partway and released it. Its partial work still holds its files.
+    if (item.status === "doing") {
+      const [agent, , where] = item.claimed.split(",").map((part) => part.trim());
+      active.set(item.id, { id: item.id, agent: agent || "someone", at: null, touches: item.touches, where: where || null, paused: true });
+    }
   }
   for (const [id, claim] of Object.entries(board.claims)) {
-    active.set(id, { id, agent: claim.agent, at: claim.at, touches: claim.touches ?? byId.get(id)?.touches ?? [], where: claim.root ?? null });
+    active.set(id, { id, agent: claim.agent, at: claim.at, touches: claim.touches ?? byId.get(id)?.touches ?? [], where: claim.root ?? null, paused: false });
   }
   return [...active.values()];
+}
+
+// Items someone stopped partway: in progress or blocked in the plan, with no
+// claim on the board. Anyone may pick these up with resume.
+export function pausedItems(board) {
+  return board.items.filter((item) => isPhaseItem(item) && ["doing", "blocked"].includes(item.status) && !board.claims[item.id]);
 }
 
 // Why an item cannot be started now. An empty list means it is ready.
@@ -280,7 +293,8 @@ export function blockers(board, item) {
   const reasons = [];
   if (!isPhaseItem(item)) reasons.push(item.phase === "operator" ? "it is an operator to-do" : "it is in the backlog, not in a phase plan");
   else if (item.phase !== currentPhase(board)) reasons.push(`it is in ${item.phase}, and the current phase is ${currentPhase(board) ?? "finished"}`);
-  if (item.status !== "todo") reasons.push(`it is marked ${item.status}`);
+  if (["doing", "blocked"].includes(item.status) && !board.claims[item.id]) reasons.push(`it is paused work someone stopped partway; pick it up with: resume ${item.id} --agent <your name>`);
+  else if (item.status !== "todo") reasons.push(`it is marked ${item.status}`);
   if (board.claims[item.id]) reasons.push(`${board.claims[item.id].agent} has claimed it`);
   for (const id of item.depends) {
     const dependency = byId.get(id);
@@ -372,13 +386,16 @@ export function summary(board, now = new Date()) {
   const readyIds = new Set(ready.map((item) => item.id));
   const active = activeWork(board);
   const activeIds = new Set(active.map((work) => work.id));
+  const paused = pausedItems(board);
+  const pausedIds = new Set(paused.map((item) => item.id));
   return {
     phase,
     progress: { done, of: counted },
     ready: ready.map(({ id, title, touches }) => ({ id, title, touches })),
-    doing: active.map((work) => ({ ...work, since: work.at ? ago(work.at, now) : null })),
+    doing: active.filter((work) => !work.paused).map((work) => ({ ...work, since: work.at ? ago(work.at, now) : null })),
+    paused: paused.map((item) => ({ id: item.id, title: item.title, by: item.claimed.split(",")[0].trim() || null, blocked: item.status === "blocked" ? item.blocked || "marked blocked" : null, handoffs: handoffsFor(board.root, item.id) })),
     waiting: inPhase
-      .filter((item) => ["todo", "blocked"].includes(item.status) && !readyIds.has(item.id) && !activeIds.has(item.id))
+      .filter((item) => ["todo", "blocked"].includes(item.status) && !readyIds.has(item.id) && !activeIds.has(item.id) && !pausedIds.has(item.id))
       .map((item) => ({ id: item.id, title: item.title, why: item.status === "blocked" && item.blocked ? [item.blocked] : blockers(board, item) })),
     operator: board.items.filter((item) => item.phase === "operator" && item.status === "todo").map(({ id, title }) => ({ id, title })),
     ...review(board, now),
@@ -395,6 +412,11 @@ function printSummary(s) {
   };
   section("Ready now", s.ready.map((item) => `${item.id}  ${item.title}  [${item.touches.join(", ")}]`));
   section("In progress", s.doing.map((work) => `${work.id}  ${work.agent}${work.since ? `, ${work.since} ago` : ""}${work.where ? `, in ${work.where}` : ""}  [${work.touches.join(", ")}]`));
+  if (s.paused.length)
+    section(
+      "Paused (stopped partway; pick up with resume <id> --agent <name>)",
+      s.paused.map((item) => `${item.id}  ${item.title}${item.by ? `, last worked on by ${item.by}` : ""}${item.blocked ? `; blocked: ${item.blocked}` : ""}${item.handoffs.length ? `; read first: ${item.handoffs.join(", ")}` : ""}`),
+    );
   section("Waiting", s.waiting.map((item) => `${item.id}  ${item.title}: ${item.why.join("; ")}`));
   section("Waiting on the operator", s.operator.map((item) => `${item.id}  ${item.title}`));
   section("Problems", s.problems);
@@ -402,8 +424,18 @@ function printSummary(s) {
   return lines.join("\n");
 }
 
+// Handoff notes that mention an item: named after it, or naming it inside.
+function handoffsFor(root, id) {
+  const dir = path.join(root, "docs", "build", "handoffs");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".md"))
+    .filter((name) => name.includes(id) || new RegExp(`\\b${id}\\b`).test(readFileSync(path.join(dir, name), "utf8")))
+    .map((name) => `docs/build/handoffs/${name}`);
+}
+
 // ---------------------------------------------------------------------------
-// Claiming and releasing
+// Claiming, releasing and resuming
 // ---------------------------------------------------------------------------
 
 // `workRoot` is the checkout the work will happen in. It defaults to this one;
@@ -440,8 +472,72 @@ export function release(root, id) {
     const { agent } = claims[id];
     delete claims[id];
     writeFileSync(file, `${JSON.stringify(claims, null, 2)}\n`);
-    return { ok: true, message: `Released ${id} (was held by ${agent}).` };
+    const item = loadBoard(root).items.find((candidate) => candidate.id === id);
+    const paused = item && ["doing", "blocked"].includes(item.status);
+    return {
+      ok: true,
+      message: paused
+        ? `Released ${id} (was held by ${agent}). It is still marked [${item.status === "doing" ? "~" : "!"}] in its plan, so it shows as paused work: anyone can pick it up, with its partial work, using resume ${id} --agent <name>. If the work is abandoned instead, mark it [ ] or [-] in the plan.`
+        : `Released ${id} (was held by ${agent}).`,
+    };
   });
+}
+
+// Pick up an item someone stopped partway, keeping its partial work, branch,
+// worktree and handoff. Allowed when the item is paused (no claim), when you
+// already hold it (a new session), or, with takeOver, when the holder's claim
+// is stale. A fresh claim by someone else is never taken.
+export function resume(root, id, agent, now = new Date(), { takeOver = false } = {}) {
+  if (!agent) return fail("Say who is picking it up: resume <id> --agent <name>.");
+  const file = claimsFile(root);
+  const result = withLock(file, () => {
+    const board = loadBoard(root);
+    const item = board.items.find((candidate) => candidate.id === id);
+    if (!item) return fail(`There is no item ${id} in the plans.`);
+    if (!isPhaseItem(item)) return fail(`${id} is not in a phase plan, so there is nothing to resume.`);
+    const held = board.claims[id];
+    if (!held && !["doing", "blocked"].includes(item.status)) return fail(`${id} is marked ${item.status}, not in progress, so there is nothing to resume. To start it, use: claim ${id} --agent ${agent}`);
+    if (held && held.agent !== agent) {
+      const age = ago(held.at, now);
+      if (now - new Date(held.at) <= STALE_AFTER_MS) return fail(`${held.agent} is working on ${id} (claimed ${age} ago), so it can't be taken over. Leave it, or ask ${held.agent} or the operator: only they should release it.`);
+      if (!takeOver) return fail(`${held.agent} claimed ${id} ${age} ago and nothing has moved, so the claim is stale. Read its handoff and look at its work first, then take it over with: resume ${id} --agent ${agent} --take-over`);
+    }
+    const byId = new Map(board.items.map((other) => [other.id, other]));
+    const waiting = item.depends.filter((dep) => byId.get(dep)?.status !== "done");
+    if (waiting.length) return fail(`${id} waits on ${waiting.join(", ")}, which ${waiting.length > 1 ? "are" : "is"} not done any more. Sort that out first.`);
+    for (const work of activeWork(board)) {
+      if (work.id === id) continue;
+      const shared = sharedPaths(item.touches, work.touches);
+      if (shared.length) return fail(`${work.agent} is working on ${work.id}, which touches the same files (${shared.join(", ")}). Wait for it, or ask the operator.`);
+    }
+    const recorded = [held?.root, item.claimed.split(",")[2]?.trim()].find((place) => place && existsSync(place));
+    const workRoot = recorded ? path.resolve(recorded) : checkoutRoot(root);
+    const previous = held?.agent ?? (item.claimed.split(",")[0].trim() || null);
+    const claims = readClaims(file);
+    claims[id] = { agent, at: now.toISOString(), touches: item.touches, root: workRoot };
+    writeFileSync(file, `${JSON.stringify(claims, null, 2)}\n`);
+    return { ok: true, item, workRoot, previous };
+  });
+  if (!result.ok) return result;
+
+  const { item, workRoot, previous } = result;
+  const handedOver = previous && previous !== agent ? `, picked up from ${previous}` : "";
+  updateItem(path.join(root, item.file), id, { mark: "~", drop: ["Claimed", "Blocked"], add: [`- **Claimed:** ${agent}, ${stamp(now)}, ${workRoot}${handedOver}`] });
+  const branch = `agent/${id}`;
+  const onBranch = git(root, "rev-parse", "--verify", branch).ok ? git(root, "rev-list", "--count", `${loadConfig(root).mainBranch}..${branch}`).out : null;
+  const notes = handoffsFor(root, id);
+  return {
+    ok: true,
+    message: [
+      `${agent} has picked up ${id}: ${item.title}${handedOver}.`,
+      `Work on it in ${workRoot}.${onBranch !== null ? ` Its branch ${branch} has ${onBranch} commit${onBranch === "1" ? "" : "s"} so far.` : ""} Partial work there is kept as it is: start with git status.`,
+      item.blocked ? `It was blocked: ${item.blocked}. Check that this is solved before carrying on.` : "",
+      notes.length ? `Read first: ${notes.join(", ")}` : "No handoff note mentions it, so check the item's plan entry and git log for what was done.",
+      `Touches: ${item.touches.join(", ")}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -541,6 +637,169 @@ function runChecks(cwd, checks) {
   return { ok: true };
 }
 
+// Save points on the main line, newest first: { sha, parents, subject, body }.
+function mainLine(root, ref = "HEAD") {
+  const log = git(root, "log", "--first-parent", "--format=%H%x1f%P%x1f%s%x1f%b%x1e", ref);
+  if (!log.ok) return [];
+  return log.out
+    .split("\x1e")
+    .map((record) => record.replace(/^\s+/, ""))
+    .filter(Boolean)
+    .map((record) => {
+      const [sha, parents, subject, body = ""] = record.split("\x1f");
+      return { sha, parents: parents.split(" ").filter(Boolean), subject, body };
+    });
+}
+
+// The save points on the line that are undone right now, each mapped to the
+// revert that undoes it. A commit is undone when a revert of it is itself still
+// in effect, so an undo that was reversed again (a revert of the revert) leaves
+// the commit in effect. Reverts are found by git's standard "This reverts
+// commit <sha>" line.
+function undoneOnLine(records) {
+  const revertedBy = new Map();
+  for (const r of records) {
+    for (const [, target] of r.body.matchAll(/This reverts commit ([0-9a-f]{7,40})/g)) {
+      const hit = records.find((other) => other.sha.startsWith(target));
+      if (hit) revertedBy.set(hit.sha, [...(revertedBy.get(hit.sha) ?? []), r.sha]);
+    }
+  }
+  // Newest first, so every revert of a commit is decided before the commit.
+  const undone = new Map();
+  for (const r of records) {
+    const by = (revertedBy.get(r.sha) ?? []).find((revert) => !undone.has(revert));
+    if (by) undone.set(r.sha, by);
+  }
+  return undone;
+}
+
+const isAncestor = (root, commit, of) => git(root, "merge-base", "--is-ancestor", commit, of).ok;
+
+// The item's work that a failed merge took off main and its branch has not
+// brought back yet, as { merge, revert }. Only the item's own newest merge
+// counts, and only while the revert that undid it is in effect, so a later
+// good merge of it ends the recovery and other items' merges never start one.
+// The recovery is pending when the plan has rollBack's "Merge undone" note for
+// that merge or, if the note was lost, when the branch holds the merged work
+// but not the merge (only the item's own branch does). An item undone on
+// purpose with undo has neither, so building it again brings nothing back.
+function undoneMerge(root, item, branch, mainBranch) {
+  const records = mainLine(root, mainBranch);
+  const latest = records.find((r) => r.parents.length > 1 && r.subject.startsWith(`merge(${item.id}):`));
+  const revert = latest && undoneOnLine(records).get(latest.sha);
+  if (!revert) return null;
+  const noted = item.text.some((line) => /\*\*Merge undone:\*\*/.test(line) && line.includes(latest.sha.slice(0, 7)));
+  const holdsWorkOnly = isAncestor(root, latest.parents[1], branch) && !isAncestor(root, latest.sha, branch);
+  if (!noted && !holdsWorkOnly) return null;
+  const broughtBack = git(root, "log", "--format=%b", `${mainBranch}..${branch}`).out.includes(`This reverts commit ${revert}`);
+  return broughtBack ? null : { merge: latest.sha, revert };
+}
+
+// Bring the undone work back onto the branch: in the worktree, revert the
+// revert on top of main (leaving the plan out, which the merge ticks itself),
+// then move the branch's own new commits on top. This works whether or not the
+// builder rebased onto main after the undo, and the commit it adds marks the
+// work as brought back, so it is never done twice. Nothing changes on main.
+function bringBack(worktree, branch, mainBranch, undone, planFile) {
+  const short = (sha) => sha.slice(0, 7);
+  // The worktree was clean before this started, so going back to the branch
+  // as it was only drops what this step did.
+  const failed = (why) => {
+    git(worktree, "rebase", "--abort");
+    git(worktree, "revert", "--abort");
+    git(worktree, "checkout", "-q", "-f", branch);
+    return fail(
+      [
+        `${branch} was merged before as ${short(undone.merge)}, and that merge was undone by ${short(undone.revert)} because the checks failed. Bringing that work back onto the branch hit a problem, so nothing was changed: ${why}`,
+        `Send it back to the builder. In the worktree: git checkout --detach ${mainBranch}, then git revert --no-edit ${short(undone.revert)}, then git rebase --onto HEAD ${mainBranch} ${branch}, and resolve. Then run merge again.`,
+      ].join("\n"),
+    );
+  };
+  if (!git(worktree, "checkout", "-q", "--detach", mainBranch).ok) return failed(`could not check out ${mainBranch} in the worktree.`);
+  // The plan is left as main has it, so a clash there alone (another item's
+  // tick next to this one's) is no clash. Any other clash stops it.
+  const reverted = git(worktree, "revert", "--no-commit", undone.revert);
+  if (!reverted.ok) {
+    const clashes = git(worktree, "diff", "--name-only", "--diff-filter=U").out.split(/\r?\n/).filter(Boolean);
+    if (!clashes.length || clashes.some((file) => file !== planFile)) return failed(reverted.err);
+  }
+  if (git(worktree, "cat-file", "-e", `HEAD:${planFile}`).ok) git(worktree, "checkout", "HEAD", "--", planFile);
+  const saved = git(worktree, "commit", "-q", "--no-edit", "--cleanup=strip");
+  if (!saved.ok) return failed(saved.err);
+  const replayed = git(worktree, "rebase", "--onto", git(worktree, "rev-parse", "HEAD").out, mainBranch, branch);
+  if (!replayed.ok) return failed(replayed.err || "the branch's own commits clash with the work being brought back.");
+  return { ok: true };
+}
+
+// Files with uncommitted changes. The status letters are stripped by pattern,
+// not by position, because the output arrives trimmed.
+function changedFiles(root, except = []) {
+  return git(root, "status", "--porcelain")
+    .out.split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => line.replace(/^[ MADRCUT?!]{1,2}\s/, "").split(" -> ").pop().trim())
+    .filter((file) => !except.includes(file));
+}
+
+// The merge broke main. Undo it with a revert, verify the result, and leave a
+// truthful, recoverable state whether or not the undo worked.
+function rollBack({ root, config, item, branch, worktree, claim: held, before, check, now }) {
+  const id = item.id;
+  const planFile = path.join(root, item.file);
+  const merged = git(root, "rev-parse", "HEAD").out;
+  const why = `"${check.command}" fails on ${config.mainBranch} after merging ${id}`;
+  const reverted = git(root, "revert", "-m", "1", "--no-edit", merged);
+
+  if (!reverted.ok) {
+    const inProgress = git(root, "rev-parse", "--git-path", "REVERT_HEAD").out;
+    if (inProgress && existsSync(path.resolve(root, inProgress))) git(root, "revert", "--abort");
+    const left = changedFiles(root, [item.file]);
+    updateItem(planFile, id, {
+      mark: "!",
+      drop: ["Done", "Blocked"],
+      add: [`- **Blocked:** merged as ${merged.slice(0, 7)} on ${now.toISOString().slice(0, 10)}, but the checks failed on ${config.mainBranch} and the merge could not be undone automatically. It is not done.`],
+    });
+    return fail(
+      [
+        `${why}. Undoing the merge failed too, so the merge is still in place: ${config.mainBranch} is at ${merged.slice(0, 7)}.`,
+        `Why the undo failed: ${reverted.err || "git revert gave no reason"}`,
+        left.length ? `Files changed since the merge, kept exactly as they are: ${left.join(", ")}` : "",
+        `${id} is marked blocked [!] in ${item.file}, not done. Its claim, the branch ${branch} and the worktree ${worktree} are kept.`,
+        `Next: look at those changes and keep or drop them yourself, then either fix ${config.mainBranch}, or undo the merge with: git revert -m 1 ${merged.slice(0, 7)}`,
+        check.tail,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
+
+  const revert = git(root, "rev-parse", "HEAD").out;
+  const restored = git(root, "diff", "--quiet", before, revert).ok;
+  // The revert also put the plan back as it was before the merge. Mark the item
+  // in progress again, for the same builder, so the board shows the truth.
+  updateItem(planFile, id, {
+    mark: "~",
+    drop: ["Claimed", "Done", "Blocked"],
+    add: [
+      `- **Claimed:** ${held?.agent ?? "its builder"}, ${stamp(held?.at ? new Date(held.at) : now)}, ${worktree}`,
+      `- **Merge undone:** ${now.toISOString().slice(0, 10)}. The checks failed on ${config.mainBranch}; ${revert.slice(0, 7)} reverts ${merged.slice(0, 7)}.`,
+    ],
+  });
+  const left = changedFiles(root, [item.file]);
+  return fail(
+    [
+      `${why}, so the merge was undone: ${revert.slice(0, 7)} reverts ${merged.slice(0, 7)}.`,
+      restored ? `${config.mainBranch} is back exactly as it was before the merge (checked).` : `The revert went through, but ${config.mainBranch} does not match how it was before the merge. Compare with: git diff ${before.slice(0, 7)} HEAD`,
+      left.length ? `The check also changed these files, kept as they are: ${left.join(", ")}` : "",
+      `${id} is back in progress for ${held?.agent ?? "its builder"}, in ${worktree} on ${branch}. The claim is kept.`,
+      `Next: fix the problem on ${branch}, commit, and run merge again. That merge brings back everything from this one, not just the fix.`,
+      check.tail,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+}
+
 export function merge(root, id, now = new Date()) {
   const config = loadConfig(root);
   const problem = needsMainCheckout(root, config);
@@ -558,6 +817,17 @@ export function merge(root, id, now = new Date()) {
   const waiting = item.depends.filter((dep) => byId.get(dep)?.status !== "done");
   if (waiting.length) return fail(`Merge ${waiting.join(", ")} first: ${id} depends on ${waiting.length > 1 ? "them" : "it"}.`);
   if (git(worktree, "status", "--porcelain").out) return fail(`The builder left uncommitted changes in ${worktree}. They must commit or drop them first.`);
+
+  // 0. If this item's last merge was undone, its commits are still reachable
+  // from main, so git would count them as merged and leave them out. Bring the
+  // work back onto the branch first, so this merge includes all of it.
+  const notes = [];
+  const undone = undoneMerge(root, item, branch, config.mainBranch);
+  if (undone) {
+    const back = bringBack(worktree, branch, config.mainBranch, undone, item.file);
+    if (!back.ok) return back;
+    notes.push(`Brought back the work from the undone merge ${undone.merge.slice(0, 7)} by reversing its undo on ${branch}, so this merge includes all of it, not just the fix.`);
+  }
   if (git(root, "rev-list", "--count", `${config.mainBranch}..${branch}`).out === "0") return fail(`${branch} has no commits yet. Nothing to merge.`);
 
   // 1. Bring the branch up to date with main, in its own worktree.
@@ -573,6 +843,7 @@ export function merge(root, id, now = new Date()) {
   if (!onBranch.ok) return fail(`"${onBranch.command}" fails on ${branch}, so it was not merged. Send it back to the builder:\n${onBranch.tail}`);
 
   // 3. Merge, and record the item as done in the same commit.
+  const before = git(root, "rev-parse", "HEAD").out;
   const merging = git(root, "merge", "--no-ff", "--no-commit", branch);
   if (!merging.ok) {
     git(root, "merge", "--abort");
@@ -580,7 +851,7 @@ export function merge(root, id, now = new Date()) {
   }
   updateItem(path.join(root, item.file), id, {
     mark: "x",
-    drop: ["Claimed", "Blocked"],
+    drop: ["Claimed", "Blocked", "Merge undone"],
     add: [`- **Done:** ${now.toISOString().slice(0, 10)}. Merged from ${branch}. Report: \`docs/build/handoffs/${id}.md\`.`],
   });
   git(root, "add", "--", item.file);
@@ -590,12 +861,10 @@ export function merge(root, id, now = new Date()) {
     return fail(`The merge commit failed, so nothing was merged: ${committed.err}`);
   }
 
-  // 4. Main must still pass. If not, undo with a new commit and keep the claim.
+  // 4. Main must still pass. If not, undo the merge with a new commit, check
+  // that the undo really happened, and keep the claim and worktree either way.
   const onMain = runChecks(root, config.checks);
-  if (!onMain.ok) {
-    git(root, "revert", "-m", "1", "--no-edit", "HEAD");
-    return fail(`"${onMain.command}" fails on ${config.mainBranch} after the merge, so the merge was undone with git revert. ${id} is still claimed; send it back to the builder:\n${onMain.tail}`);
-  }
+  if (!onMain.ok) return rollBack({ root, config, item, branch, worktree, claim: claimRecord, before, check: onMain, now });
 
   // 5. Clean up.
   release(root, id);
@@ -604,10 +873,101 @@ export function merge(root, id, now = new Date()) {
   return {
     ok: true,
     message: [
+      ...notes,
       `Merged ${id}: ${item.title}. It is ticked in ${item.file} and the claim is released.`,
       removed.ok ? `Removed the worktree ${worktree}.` : `Could not remove the worktree (${removed.err}). Remove it later with: git worktree remove "${worktree}"`,
       deleted.ok ? `Deleted the branch ${branch}.` : `Could not delete ${branch}: ${deleted.err}`,
       `Now copy the notes for the shared files from docs/build/handoffs/${id}.md (decisions, learnings, changelog, checks, to-dos) into those files.`,
+    ].join("\n"),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Undo: go back to before an item, without rewriting history
+// ---------------------------------------------------------------------------
+
+const escapeForRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// The item's save points on the main line that are in effect now, newest
+// first. Only first-parent history counts: in parallel mode the save point is
+// the merge, and the builder's own commits inside it are not listed again. A
+// save point whose undo was itself reversed is in effect again, so it is listed.
+export function savePointsFor(root, id) {
+  const records = mainLine(root);
+  const undone = undoneOnLine(records);
+  const names = new RegExp(`^[a-z]+\\([^)]*\\b${escapeForRegExp(id)}\\b[^)]*\\)!?:`, "i");
+  return records.filter((r) => names.test(r.subject) && !undone.has(r.sha));
+}
+
+// Revert the item's save points, newest first, each once: a merge against its
+// first parent (which undoes the whole merge), an ordinary commit as it is.
+// Then reopen the item and run the checks. Without yes, only say what it would do.
+export function undo(root, id, { yes = false, now = new Date() } = {}) {
+  if (!git(root, "rev-parse", "--verify", "HEAD").ok) return fail("There are no save points yet, so there is nothing to undo.");
+  if (isLinkedWorktree(root)) return fail("Run undo from the main checkout, not from inside a builder's worktree.");
+  const targets = savePointsFor(root, id);
+  if (!targets.length) return { ok: true, message: `Nothing to undo for ${id}: no save point on this branch names it, or it has been undone already.` };
+  const listed = targets.map((r) => `  ${r.sha.slice(0, 7)}  ${r.subject}${r.parents.length > 1 ? "  (a merge: undone in one step, together with the builder's commits inside it)" : ""}`);
+  if (!yes) {
+    return {
+      ok: true,
+      message: [
+        targets.length > 1 ? `Undoing ${id} would add ${targets.length} new commits that reverse these save points, newest first:` : `Undoing ${id} would add 1 new commit that reverses this save point:`,
+        ...listed,
+        "Nothing is deleted, and the undo can be undone too.",
+        `To go ahead: node .agents/scripts/board.mjs undo ${id} --yes`,
+      ].join("\n"),
+    };
+  }
+  const dirty = changedFiles(root);
+  if (dirty.length) return fail(`There are unsaved changes (${dirty.join(", ")}). Save them as a save point, or set them aside, before undoing, so the undo can't mix with them.`);
+
+  const short = (sha) => sha.slice(0, 7);
+  const reversals = [];
+  const listReversals = () => reversals.map((r) => `${short(r.target)} by ${short(r.by)}`).join(", ");
+  for (const r of targets) {
+    const step = git(root, ...(r.parents.length > 1 ? ["revert", "--no-edit", "-m", "1", r.sha] : ["revert", "--no-edit", r.sha]));
+    if (!step.ok) {
+      const inProgress = git(root, "rev-parse", "--git-path", "REVERT_HEAD").out;
+      if (inProgress && existsSync(path.resolve(root, inProgress))) git(root, "revert", "--abort");
+      return fail(
+        [
+          `Undid ${reversals.length} of ${targets.length} save points for ${id}, then stopped: reversing ${short(r.sha)} (${r.subject}) clashes with later work, so it was left as it is.`,
+          `git said: ${step.err}`,
+          reversals.length ? `Already reversed: ${listReversals()}.` : "Nothing was changed.",
+          "Later save points changed the same lines. Undo those first, or ask an agent to reverse it by hand.",
+        ].join("\n"),
+      );
+    }
+    reversals.push({ target: r.sha, by: git(root, "rev-parse", "HEAD").out });
+  }
+
+  // Reopen the item inside the last reversal, not in a commit of its own, so
+  // that reverting the reversals brings back the work and the plan together.
+  const board = loadBoard(root);
+  const item = board.items.find((candidate) => candidate.id === id);
+  let reopened = `${id} is not in any plan, so there was nothing to reopen.`;
+  if (item) {
+    updateItem(path.join(root, item.file), id, {
+      mark: " ",
+      drop: ["Done", "Claimed", "Blocked", "Merge undone", "Undone"],
+      add: [`- **Undone:** ${now.toISOString().slice(0, 10)}, by reversing ${targets.map((r) => short(r.sha)).join(", ")}. Build it again, or mark it [-] with the reason if it is no longer wanted.`],
+    });
+    git(root, "add", "--", item.file);
+    const saved = git(root, "commit", "--amend", "--no-edit");
+    if (saved.ok) reversals.at(-1).by = git(root, "rev-parse", "HEAD").out;
+    reopened = saved.ok ? `${id} is open again in ${item.file}.` : `${id} is marked open again in ${item.file}, but saving that change failed: ${saved.err}`;
+  }
+  if (board.claims[id]) release(root, id);
+  const config = loadConfig(root);
+  const checks = config.checks.length ? runChecks(root, config.checks) : null;
+  return {
+    ok: !checks || checks.ok,
+    message: [
+      `Undid ${id}: reversed ${listReversals()}.`,
+      reopened,
+      !checks ? "No checks are set in .agents/board.json, so run the item-done checks from AGENTS.md now." : checks.ok ? "The checks pass." : `"${checks.command}" fails after the undo. Nothing else was changed; look at it before carrying on:\n${checks.tail}`,
+      `Nothing was deleted: git log still shows every save point. To bring ${id} back as it was: git revert --no-edit ${reversals.map((r) => short(r.by)).reverse().join(" ")}`,
     ].join("\n"),
   };
 }
@@ -694,8 +1054,13 @@ export function main(argv, { print = console.log, printError = console.error, cw
       }
       case "ready": {
         const ready = readyItems(board);
-        if (json) print(JSON.stringify(ready, null, 2));
-        else print(ready.length ? ready.map((item) => `${item.id}  ${item.title}  [${item.touches.join(", ")}]`).join("\n") : "Nothing is ready. Run the board with no command to see why.");
+        const paused = pausedItems(board);
+        if (json) print(JSON.stringify({ ready, paused }, null, 2));
+        else {
+          const lines = paused.map((item) => `${item.id}  ${item.title}  (paused: pick it up first with resume ${item.id} --agent <your name>)`);
+          lines.push(...ready.map((item) => `${item.id}  ${item.title}  [${item.touches.join(", ")}]`));
+          print(lines.length ? lines.join("\n") : "Nothing is ready. Run the board with no command to see why.");
+        }
         return 0;
       }
       case "check": {
@@ -709,12 +1074,14 @@ export function main(argv, { print = console.log, printError = console.error, cw
         return 0;
       }
       case "claim":
+      case "resume":
       case "release": {
         if (!id) {
-          printError(`Which item? ${command} <id>${command === "claim" ? " --agent <name>" : ""}`);
+          printError(`Which item? ${command} <id>${command === "release" ? "" : " --agent <name>"}`);
           return 1;
         }
-        const result = command === "claim" ? claim(root, id, valueOf("--agent")) : release(root, id);
+        const result =
+          command === "claim" ? claim(root, id, valueOf("--agent")) : command === "resume" ? resume(root, id, valueOf("--agent"), new Date(), { takeOver: args.includes("--take-over") }) : release(root, id);
         (result.ok ? print : printError)(result.message);
         return result.ok ? 0 : 1;
       }
@@ -734,6 +1101,15 @@ export function main(argv, { print = console.log, printError = console.error, cw
         print([`Start these ${picked.length} (their files don't overlap, ${active} already in progress, limit ${max}):`, ...picked.map((item) => `  node .agents/scripts/board.mjs start ${item.id} --agent <builder name>    # ${item.title}`)].join("\n"));
         return 0;
       }
+      case "undo": {
+        if (!id) {
+          printError("Which item? undo <id>, then undo <id> --yes to go ahead.");
+          return 1;
+        }
+        const result = undo(root, id, { yes: args.includes("--yes") });
+        (result.ok ? print : printError)(result.message);
+        return result.ok ? 0 : 1;
+      }
       case "start":
       case "merge": {
         if (!id) {
@@ -745,7 +1121,7 @@ export function main(argv, { print = console.log, printError = console.error, cw
         return result.ok ? 0 : 1;
       }
       default:
-        printError(`Unknown command "${command}". Use: status, ready, claim, release, check, graph, next, start or merge.`);
+        printError(`Unknown command "${command}". Use: status, ready, claim, resume, release, check, graph, next, start, merge or undo.`);
         return 1;
     }
   } catch (error) {

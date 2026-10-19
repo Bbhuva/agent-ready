@@ -51,7 +51,7 @@ agent-ready fixes this with plain files and six small scripts. No service, no ac
 | `.agents/commands/`, `.agents/scripts/commands.mjs` | Your `/ar-` commands, written once and installed into each tool's own format. `docs/operator/commands.md` lists them. |
 | `.agents/skills/agent-ready/` | A copy of this skill, so `/ar-setup` can check or update the setup without downloading again. |
 | `.agents/scripts/health.mjs` | Checks the whole setup in plain words: the map, the docs, whether each tool runs the guard, the secret check on commits, the plans, missing keys, leftover worktrees. |
-| `.agents/hooks/guard.mjs` | Blocks agents from reading secret files and running destructive commands, and from writing into files another agent has claimed. |
+| `.agents/hooks/guard.mjs` | Blocks agents from reading secret files and running destructive commands. In parallel work it also blocks writes into files another agent has claimed: structured edits, and shell commands that name the file they write (it can't see what scripts or build tools write). |
 | `.agents/hooks/precommit-guard.mjs` | Refuses any commit that adds a secret file or a real-looking API key, whoever makes it. |
 
 `docs/` holds documents only. Your code goes in folders chosen with the stack: the framework's usual layout for one app, or `apps/` and `packages/` when there are several.
@@ -120,8 +120,9 @@ They are written once, in `.agents/commands/`, and `node .agents/scripts/command
 Choose "several at the same time" during setup and the project runs in parallel mode:
 
 1. **A coordinator** (usually the session you talk to) runs `board.mjs next` to pick items whose files don't overlap, and `board.mjs start <id>` for each. That claims the item, makes its worktree and `agent/<id>` branch, and prints a brief to hand to the builder.
-2. **Each builder** works in its own worktree on one item, commits only to its branch, and finishes with a report. The guard stops it writing outside its item's files, and stops anyone else writing into them.
-3. **The coordinator merges** with `board.mjs merge <id>`, one branch at a time, in dependency order, after you say "merge". It rebases, runs the checks on the branch and again after merging, undoes the merge with `git revert` if anything breaks, ticks the item, and cleans up the worktree and branch.
+2. **Each builder** works in its own worktree on one item, commits only to its branch, and finishes with a report. The separate worktree is what keeps builders apart. On top of that, the guard refuses edits outside the builder's item files, and edits into them from anyone else. It sees structured edits and shell commands that name the file they write, not what scripts or build tools write.
+3. **The coordinator merges** with `board.mjs merge <id>`, one branch at a time, in dependency order, after you say "merge". It rebases, runs the checks on the branch and again after merging, ticks the item, and cleans up the worktree and branch. If the checks fail after merging, it undoes the merge, confirms the undo worked, and hands the item back to its builder. Once it is fixed, the next merge brings back all of that item's work, not just the fix. If the undo itself fails, it says so and marks the item blocked, never done.
+4. **Stopped partway?** A builder that stops releases its claim, and the item shows as paused. The next one picks it up with `board.mjs resume <id>`, keeping its worktree, branch and handoff. A fresh claim held by someone else can't be taken.
 
 The board is what keeps builders apart. Claims live inside the git folder, which every worktree shares, so a second agent cannot take an item that is already taken, or one that touches the same files.
 
@@ -192,7 +193,7 @@ Open questions:
 
 - **About 1,400 tokens loaded per session.** `AGENTS.md` is an 80-line map, kept under 100 lines by rule and under 80 by this repo's tests. The other rules (about 9,500 tokens in seven files) load only when a task needs them.
 - **One skill, one entry** in your agent's skill list (about 240 tokens), however much it sets up.
-- **Enforced by code, not by asking nicely:** reading secrets, destructive commands, committing keys, two agents claiming the same files, and writing into another agent's claimed files are all refused by scripts.
+- **Enforced by code, not by asking nicely:** reading secrets, destructive commands, committing keys and two agents claiming the same files are all refused by scripts. Writes into another agent's claimed files are refused for structured edits and for shell commands that name the file; scripts and build tools are not covered, and separate worktrees do the real isolating.
 - **125 automated tests** cover the guards, the commit check, the board, parallel merges in real git worktrees, the key helper, the health check, the commands in every tool format, and the paste-in prompt.
 
 Not measured yet: total tokens per task compared with no setup, and live runs inside every tool. The hooks are tested against each tool's documented input format.

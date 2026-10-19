@@ -40,7 +40,7 @@ For the live app: {{the host's settings page, with the exact menu path, and how 
 
 ## Save points: going back
 
-Every finished item is saved as a save point on your computer. To go back, tell an agent "undo auth-003" or "go back to before auth-003". It adds a new save point that reverses that item, so nothing is lost and you can change your mind again. To see the save points: `git log --oneline`.
+Every finished item is saved as a save point on your computer. To go back, tell an agent "undo auth-003" or type `/ar-undo auth-003`. It first tells you what it will undo and waits for your yes. Then it adds a new save point that reverses that item, so nothing is lost. Changed your mind? Ask the agent to bring it back: the undo gave it the one command that does that. To see the save points: `git log --oneline --first-parent`.
 
 ## Try a change before it goes live
 
@@ -76,6 +76,14 @@ Never include keys, passwords or customer details. If one ended up in a screensh
 - Before closing a chat partway through, ask for a handoff note, so the next chat doesn't need the whole history.
 - Point the agent to files ("look at docs/operator/todo.md") instead of pasting long text.
 - Set a spending limit on every paid service (`docs/operator/launch.md`, Money).
+
+## Which AI model should I use?
+
+You can start a small, clear task with the model and settings already selected in your coding tool. The agent should explain when the work would benefit from a different choice, using the options your tool actually offers and your budget. You can ask: "Is the current model suitable for this task? Explain any change you recommend."
+
+A model is the AI doing the work. A reasoning setting controls how much effort a supported model spends working through it. Labels such as high or xhigh can mean more time and more usage; the highest setting is not needed for every task.
+
+The agent may recommend a more capable model for planning, important reviews, difficult bugs or changes where a mistake could expose data or lose money. It must still check the result. If the tool needs you to change the setting, the agent should give you a short, exact instruction. A recommendation alone does not change the model.
 
 ## Accounts and costs
 

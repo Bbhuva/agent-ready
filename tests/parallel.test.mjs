@@ -167,11 +167,13 @@ test("merge undoes itself when the checks fail on main afterwards", () => {
     commitIn(p.worktree("ui-002"), "src/about.js", "about\n", "feat(ui-002): about");
     const out = board(p.root, "merge", "ui-002");
     assert.equal(out.code, 1);
-    assert.match(out.stderr, /merge was undone with git revert/);
+    assert.match(out.stderr, /so the merge was undone: [0-9a-f]{7} reverts [0-9a-f]{7}/);
+    assert.match(out.stderr, /back exactly as it was before the merge \(checked\)/);
     assert.match(git(p.root, "log", "-1", "--format=%s"), /^Revert "merge\(ui-002\)/);
     assert.ok(!existsSync(path.join(p.root, "src", "about.js")), "the change is gone from main");
     assert.ok(existsSync(p.worktree("ui-002")), "the builder keeps its worktree");
     assert.match(board(p.root).stdout, /ui-002 {2}builder-1/, "and its claim");
+    assert.match(plan(p.root), /- \[~\] \*\*ui-002\*\*/, "and the plan shows it in progress, not done");
   } finally {
     rmSync(p.base, { recursive: true, force: true });
   }

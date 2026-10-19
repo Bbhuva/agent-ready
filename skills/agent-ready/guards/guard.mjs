@@ -3,7 +3,9 @@
 //
 // Stops AI coding agents from reading secret files (.env and friends), from
 // running commands that destroy work, and, when agents work in parallel, from
-// writing into files another agent has claimed on the board. One script serves Claude Code, Codex,
+// writing into files another agent has claimed on the board. That last check
+// covers structured edits (write and edit tools, patches) and the shell
+// commands that name the file they write; see shellWriteTargets for its limits. One script serves Claude Code, Codex,
 // Cursor and Gemini CLI / Antigravity as a command hook, and OpenCode through a
 // small plugin that imports checkToolCall(). No dependencies. Node 18 or newer.
 //
@@ -267,6 +269,64 @@ function checkShellCommand(command) {
   return null;
 }
 
+// The files a shell command plainly names as the ones it writes: redirect
+// targets, and the path arguments of the common write, copy, move and delete
+// commands, including inside `bash -c` and `pwsh -Command`. This reads the
+// command text only. It cannot see files a script, an interpreter (node -e,
+// python -c), a package manager or a build tool writes, so it narrows the
+// common cases rather than isolating anything. Worktrees do the isolating.
+const WRITE_EVERY_ARG = new Set(["tee", "touch", "truncate", "rm", "del", "erase", "unlink", "rmdir", "rd", "remove-item", "ri", "mv", "move", "move-item", "mi", "ren", "rename-item", "rni"]);
+const WRITE_LAST_ARG = new Set(["cp", "copy", "install", "copy-item", "cpi"]);
+const WRITE_PATH_PARAM = new Set(["set-content", "sc", "add-content", "ac", "out-file", "new-item", "ni", "clear-content", "clc"]);
+const SHELL_WRAPPERS = new Set(["bash", "sh", "zsh", "pwsh", "powershell", "cmd"]);
+
+const unquote = (token) => token.replace(/^['"]+|['"]+$/g, "").replace(/[;,)]+$/, "");
+const usablePath = (token) => token && !token.includes("$") && !/^(\/dev\/|nul$|&)/i.test(token);
+
+export function shellWriteTargets(command, depth = 0) {
+  const targets = [];
+  for (const segment of splitSegments(command)) {
+    for (const match of segment.matchAll(/(\d?>>?|\*>>?)\s*([^\s<>;|&'"]+)/g)) {
+      if (usablePath(match[2])) targets.push(match[2]);
+    }
+    const words = segment.split(/\s+/).filter(Boolean);
+    const { program, rest } = programOf(words);
+    const args = rest.filter((word) => !/^\d?>/.test(word));
+    const positional = (list) => list.filter((word) => !/^-{1,2}\w/.test(word) && !/^\/\w$/.test(word)).map(unquote).filter(usablePath);
+
+    if (SHELL_WRAPPERS.has(program) && depth < 2) {
+      const flag = args.findIndex((word) => /^(-l?c|-command|\/c)$/i.test(word));
+      if (flag !== -1) targets.push(...shellWriteTargets(unquote(args.slice(flag + 1).join(" ")), depth + 1));
+    } else if (WRITE_EVERY_ARG.has(program)) {
+      targets.push(...positional(args));
+    } else if (WRITE_LAST_ARG.has(program)) {
+      const named = args.findIndex((word) => /^-destination$/i.test(word));
+      const destination = named !== -1 ? args[named + 1] : positional(args).at(-1);
+      if (destination && usablePath(unquote(destination))) targets.push(unquote(destination));
+    } else if (WRITE_PATH_PARAM.has(program)) {
+      const named = args.findIndex((word) => /^-(path|literalpath|filepath)$/i.test(word));
+      const target = named !== -1 ? args[named + 1] : positional(args)[0];
+      if (target && usablePath(unquote(target))) targets.push(unquote(target));
+    } else if ((program === "sed" || program === "perl") && args.some((word) => /^(-i|--in-place|-\w*i\w*)/.test(word) && !/^--?e/.test(word))) {
+      const files = [];
+      let scriptGiven = false;
+      for (let i = 0; i < args.length; i++) {
+        if (/^(-e|--expression)$/.test(args[i]) || (program === "perl" && /^-\w*e$/.test(args[i]))) {
+          scriptGiven = true;
+          i++;
+        } else if (!args[i].startsWith("-")) files.push(args[i]);
+      }
+      targets.push(...positional(scriptGiven ? files : files.slice(1)));
+    } else if (program === "git") {
+      const sub = args.find((word) => !word.startsWith("-"));
+      const after = args.slice(args.indexOf(sub) + 1);
+      if (["rm", "mv", "restore"].includes(sub)) targets.push(...positional(after.filter((word) => word !== "--")));
+      if (sub === "checkout" && after.includes("--")) targets.push(...positional(after.slice(after.indexOf("--") + 1)));
+    }
+  }
+  return [...new Set(targets)];
+}
+
 // ---------------------------------------------------------------------------
 // Claimed files. When agents work in parallel, the board (.agents/scripts/
 // board.mjs) records who holds which item, which files it covers, and which
@@ -364,6 +424,7 @@ export function checkToolCall(toolName, toolInput, { cwd = process.cwd(), claims
     const raw = input.command ?? input.cmd ?? input.script ?? "";
     const command = Array.isArray(raw) ? raw.join(" ") : String(raw);
     reason = checkShellCommand(command);
+    if (!reason && claims) writes = shellWriteTargets(command);
   } else if (PATCH_TOOLS.test(name)) {
     const patch = input.command ?? input.patch ?? input.patchText ?? input.input ?? "";
     writes = patchPaths(Array.isArray(patch) ? patch.join("\n") : patch);
