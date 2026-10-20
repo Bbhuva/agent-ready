@@ -1,7 +1,9 @@
 # agent-ready guard for Codex: blocks secret-file reads and destructive commands.
 # Merge this into .codex/config.toml at the project root.
 # Codex only runs project hooks after you trust the project and approve the
-# hook once with /hooks. Until then it is skipped without a warning.
+# hook: from the hook-approval icon in the Codex app's bar, or with /hooks in
+# Codex's terminal version (node .agents/scripts/codex-guard.mjs opens it).
+# Until then it is skipped without a warning.
 
 [[hooks.PreToolUse]]
 matcher = ".*"

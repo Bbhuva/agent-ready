@@ -48,11 +48,11 @@ Every finished item is saved as a save point on your computer. To go back, tell 
 
 ## Ship a change
 
-{{What to say to the agent (for example "deploy"), what happens next, and how to check it went out.}}
+{{What to say to the agent (for example "deploy"), what happens next, and how to check it went out. If nothing is deployed, say so plainly, and how to keep a copy on GitHub instead.}}
 
 ## Undo a bad deploy
 
-{{The fastest safe way back, e.g. "In Vercel, open Deployments, pick the last good one, choose Promote to Production." Then ask an agent to undo the item that caused it.}}
+{{The fastest safe way back on this host, with the exact menu path, e.g. "Open the host's list of deploys, pick the last good one and make it live again." Then ask an agent to undo the item that caused it. If nothing is deployed, delete this section.}}
 
 ## Report a problem
 
@@ -76,6 +76,10 @@ Never include keys, passwords or customer details. If one ended up in a screensh
 - Before closing a chat partway through, ask for a handoff note, so the next chat doesn't need the whole history.
 - Point the agent to files ("look at docs/operator/todo.md") instead of pasting long text.
 - Set a spending limit on every paid service (`docs/operator/launch.md`, Money).
+
+## Using Codex? Switch on its safety guard once
+
+{{Only if Codex is one of the tools here; otherwise delete this section.}} Codex runs this project's safety guard only after you approve it, once. Open this project in the Codex app and look for the hook-approval icon in its bar. Open it, check the command is `node .agents/hooks/guard.mjs`, and approve it. (Typing `/hooks` in the app's chat won't work.) No icon? Ask any agent to "switch on the guard in Codex": it opens a window with Codex running in this folder and tells you what to press.
 
 ## Which AI model should I use?
 

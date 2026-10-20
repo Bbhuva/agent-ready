@@ -7,7 +7,7 @@ How the parts of {{PROJECT_NAME}} fit together. Agents read this before adding a
 ```mermaid
 graph LR
   user[People using it] --> web["{{e.g. Web app, apps/web}}"]
-  web --> db[("{{e.g. Supabase Postgres}}")]
+  web --> db[("{{e.g. Postgres, or SQLite for a local tool}}")]
   web --> pay["{{e.g. Stripe}}"]
 ```
 

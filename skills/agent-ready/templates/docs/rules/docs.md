@@ -45,4 +45,26 @@ Anything an agent cannot or must not do itself goes in `docs/operator/todo.md`, 
 - paying for anything, accepting terms, publishing to an app store;
 - giving access: inviting an agent's account, adding a deploy key, approving a hook.
 
-Items that need one list its ID in `Depends`, so the board shows them as waiting, and you carry on with other work. When the operator says "op-NNN done", check it worked if you can (for keys: `node .agents/scripts/keys.mjs` shows the name as set, never the value), tick it, and continue. Never run `keys.mjs add` yourself, and never ask for a key in the chat. Trying something on a real device or with a real card is a check, not a to-do: it goes in `docs/operator/mtest.md`.
+Not on the list: anything the operator answers in the chat (a question, a choice, a yes to a plan), and anything they can do right now while you wait (restarting the tool after setup). Ask for those in the chat. An entry is only for work they do later, outside the chat.
+
+Write each entry under "Waiting on you", most urgent first. If it blocks a launch, say so in the title:
+
+```markdown
+- [ ] **op-NNN** Short title in plain words `install | sign up | key | money | access`
+  - **Why:** one sentence: what it unlocks.
+  - **Blocks:** the item IDs waiting on it, or "nothing yet".
+  - **Steps:**
+    1. Exact steps: which website, what to click, what to type. Assume no technical knowledge. Give Windows and Mac steps if they differ.
+  - **Where the result goes:** e.g. "In a terminal in the project folder, run `node .agents/scripts/keys.mjs add STRIPE_SECRET_KEY` and paste the key when asked (it shows stars). Don't send it to me." or "Reply with the project URL. It is not secret."
+  - **How we'll know it worked:** what they will see, or the check you will run, e.g. "`node .agents/scripts/keys.mjs` shows STRIPE_SECRET_KEY as set".
+```
+
+For every paid service, add a second entry right after the sign-up:
+
+```markdown
+- [ ] **op-NNN** Set a spending limit on <service> `money`
+  - **Why:** a bug can run up a large bill overnight. A limit stops it.
+  - **Steps:** 1. Open <service's billing page>. 2. Set a monthly limit of <amount>. 3. Turn on an email alert at <half of it>.
+```
+
+Items that need one list its ID in `Depends`, so the board shows them as waiting, and you carry on with other work. When the operator says "op-NNN done", check it worked if you can (for keys: `node .agents/scripts/keys.mjs` shows the name as set, never the value), tick it, add `**Done:** <date>`, move it under "Done", and continue. Never run `keys.mjs add` yourself, and never ask for a key in the chat. Trying something on a real device or with a real card is a check, not a to-do: it goes in `docs/operator/mtest.md`.

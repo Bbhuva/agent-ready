@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -94,4 +94,23 @@ test("the git hook file blocks a real commit", () => {
   const commit = spawnSync("git", ["commit", "-m", "oops"], { cwd: dir, encoding: "utf8" });
   assert.notEqual(commit.status, 0);
   assert.match(commit.stderr, /agent-ready stopped this commit/);
+});
+
+test("--decoy-test proves a secret file is refused, prints PASS, and stages nothing real", () => {
+  const { dir, git } = makeRepo();
+  const empty = check(dir, "--decoy-test");
+  assert.equal(empty.status, 0, empty.stderr);
+  assert.match(empty.stdout, /^PASS {2}A commit that adds a secret file is refused/, "works before the first commit too");
+
+  writeFileSync(path.join(dir, "app.js"), "x\n");
+  git("add", "app.js");
+  git("commit", "-q", "-m", "first");
+  writeFileSync(path.join(dir, "next.js"), "y\n");
+  git("add", "next.js");
+  const out = check(dir, "--decoy-test");
+  assert.equal(out.status, 0, out.stderr);
+  assert.match(out.stdout, /^PASS/);
+  assert.equal(git("diff", "--cached", "--name-only").trim(), "next.js", "the real staging area is untouched");
+  assert.ok(!existsSync(path.join(dir, ".env.agent-ready-check")), "no decoy file is left in the project");
+  assert.ok(!readdirSync(path.join(dir, ".git")).some((name) => name.includes("agent-ready-decoy")), "the throwaway staging area is removed");
 });

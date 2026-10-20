@@ -26,7 +26,7 @@ Chosen {{DATE}}: {{"operator decision", or "agent recommendation, approved by th
 
 | Folder | What goes there |
 | --- | --- |
-| {{e.g. `apps/web`, or `src/` for a single app}} | {{e.g. the Next.js web app}} |
+| {{e.g. `apps/web`, or `src/` for a single app}} | {{e.g. the web app}} |
 | {{e.g. `packages/shared`}} | {{e.g. code the apps share. Delete the row if there is one app}} |
 | `scripts/` | {{developer scripts, e.g. seeding the database}} |
 | `outputs/` | {{files the project produces for people to keep, such as reports or exports. Delete the row if there are none}} |

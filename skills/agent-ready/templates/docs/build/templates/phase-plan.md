@@ -47,7 +47,7 @@ Items in one iteration never depend on each other, so they can be built in paral
 
 The operator's part (installs, sign-ups, keys, payments, approvals) lives in `docs/operator/todo.md` as `op-` items, so the operator has one list. Items that need one name it in `Depends`. List the ones this phase needs, most urgent first:
 
-- {{e.g. op-001 Create the Supabase project (blocks auth-001)}}
+- {{e.g. op-001 Create the database account (blocks auth-001)}}
 
 ## Phase-end review
 

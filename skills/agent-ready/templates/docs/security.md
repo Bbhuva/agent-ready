@@ -15,7 +15,7 @@ Load this when you touch sign-in, permissions, secrets, payments or user data. T
 ## Where secrets live
 
 - Local development: `.env` (or `.env.local`). Git ignores it. Agents never read it.
-- Production: {{the host's secret settings, e.g. "Vercel project settings, Environment Variables"}}.
+- Production: {{where the host keeps secrets, with the menu path, e.g. "the host's dashboard, Settings, Environment Variables". If nothing is deployed: "Not deployed: keys stay in `.env` on this computer."}}.
 - The list of names (never values): `.env.example`.
 
 | Variable | Server only or public? | What it is for |

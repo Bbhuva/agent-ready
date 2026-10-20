@@ -8,13 +8,14 @@
 //   node .agents/hooks/precommit-guard.mjs              check what is staged (the hook runs this)
 //   node .agents/hooks/precommit-guard.mjs --scan-repo  check every tracked file, once, on an existing project
 //   node .agents/hooks/precommit-guard.mjs --self-test  prove the patterns work
+//   node .agents/hooks/precommit-guard.mjs --decoy-test prove a commit with a secret file is refused
 //
 // A false alarm? The human (never an agent) can check it and run
 // `git commit --no-verify` once. Better: move the value into .env and read it
 // from there.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { DECOY_FILE, isSecretPath } from "./guard.mjs";
@@ -43,8 +44,8 @@ const KEY_PATTERNS = [
 // Files that are never worth scanning line by line.
 const SKIP_CONTENT = /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|Cargo\.lock|poetry\.lock|composer\.lock|Gemfile\.lock|go\.sum)$|\.(min\.js|map|svg|png|jpe?g|gif|webp|ico|pdf|zip|woff2?|ttf)$/i;
 
-function git(args) {
-  return execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+function git(args, { env, input } = {}) {
+  return execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: env ? { ...process.env, ...env } : process.env, input });
 }
 
 function mask(text) {
@@ -66,11 +67,11 @@ function secretFileProblems(files) {
     .map((file) => `${file}: this file holds secrets and must never be committed.`);
 }
 
-function checkStaged() {
-  const files = git(["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"]).split("\0").filter(Boolean);
+function checkStaged(env) {
+  const files = git(["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"], { env }).split("\0").filter(Boolean);
   const problems = secretFileProblems(files);
 
-  const diff = git(["diff", "--cached", "-U0", "--no-color", "--diff-filter=ACMR"]);
+  const diff = git(["diff", "--cached", "-U0", "--no-color", "--diff-filter=ACMR"], { env });
   let file = "";
   let lineNo = 0;
   for (const line of diff.split("\n")) {
@@ -139,9 +140,44 @@ function runSelfTest() {
   return failures === 0 ? 0 : 1;
 }
 
+// The setup's proof that a commit with a secret file is refused. It stages a
+// made-up .env.agent-ready-check in a throwaway copy of git's staging area, so
+// nothing real is staged and no file is written in the project, and passes
+// only if the check refuses it.
+function runDecoyTest() {
+  const index = path.resolve(git(["rev-parse", "--git-path", "agent-ready-decoy-index"]).trim());
+  const env = { GIT_INDEX_FILE: index };
+  try {
+    if (git(["rev-parse", "--verify", "-q", "HEAD"]).trim()) git(["read-tree", "HEAD"], { env });
+  } catch {
+    // No commits yet: start from an empty staging area.
+  }
+  try {
+    const blob = git(["hash-object", "-w", "--stdin"], { input: "AGENT_READY_CHECK=this-is-not-a-secret\n" }).trim();
+    git(["update-index", "--add", "--cacheinfo", `100644,${blob},${DECOY_FILE}`], { env });
+    const refused = checkStaged(env).some((problem) => problem.startsWith(`${DECOY_FILE}:`));
+    console.log(
+      refused
+        ? "PASS  A commit that adds a secret file is refused. (Tested with a made-up file in a throwaway copy of the staging area: nothing real was staged.)"
+        : "FAIL  A commit with a secret file was not refused. The check itself is broken: tell the person, and don't rely on it.",
+    );
+    return refused ? 0 : 1;
+  } finally {
+    rmSync(index, { force: true });
+  }
+}
+
 function main() {
   const args = process.argv.slice(2);
   if (args.includes("--self-test")) process.exit(runSelfTest());
+  if (args.includes("--decoy-test")) {
+    try {
+      process.exit(runDecoyTest());
+    } catch (error) {
+      console.error(`agent-ready: could not run git (${error.message}). Is this a git repository?`);
+      process.exit(1);
+    }
+  }
 
   const scan = args.includes("--scan-repo");
   let problems;

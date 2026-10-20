@@ -52,7 +52,13 @@ Ask only what Step 1 and the person's message did not answer, in **one message**
 1. **What are you building, and for whom?** Skip if they pasted an idea or the repo makes it obvious.
 2. **Which AI tools will you use here?** Default: the one you are running in, plus any you detected.
 3. **How many agents at once?** One / taking turns (for example Claude plans, Codex builds) / several at the same time (parallel: a coordinator hands each builder one item in its own git worktree, and merges them in order). Default: one. Parallel mode needs a git repo with at least one commit; if there is none, say so and add it to the plan for their yes.
-4. **How do you ship?** Default: "Each finished item is saved as a save point (a local commit I can go back to). Nothing leaves my computer until I say *deploy*; then the agent commits the release with `[Deploy]` in the message and pushes `main`, and my host deploys it." Ask which host if you cannot tell. If they would rather commit by hand, that is an override.
+4. **How does it ship?** Save points are the same for everyone: each finished item becomes a local commit they can go back to, and nothing leaves the computer until they say so. Shipping depends on the project, so offer the default that fits what the stack and the repo show (for a new project, the recommended stack), and never name a host they have not chosen:
+   - A host that deploys from GitHub (Vercel, Netlify, Cloudflare Pages, Render and similar): "When I say *deploy*, the agent pushes `main` and the host deploys it."
+   - A host with its own deploy command (Fly.io, Firebase, a server of their own): "When I say *deploy*, the agent runs the host's deploy command."
+   - A phone app, a package or a desktop app: "When I say *release*, the agent prepares the release and I submit or publish it."
+   - Nothing to host (a script, a tool for their own computer, or too early to say): "Nothing is deployed. The agent pushes to GitHub only when I say *push*."
+
+   If they would rather commit by hand, or want their own trigger word or commit-message marker, that is an override.
 5. **Anything agents must never touch here?** For example billing, real customer emails, the production database.
 
 **Tech stack.** If this is a new project and the stack is not clear, read `reference/stack-guide.md` and add its stack questions to the same message as a second short list. For an existing project, the stack is whatever the repo uses: don't ask.
@@ -119,7 +125,7 @@ Copy each template, replace every `{{...}}` with real content, and **delete any 
 **Filling in `docs/rules/`:**
 
 - `testing.md`: the coverage command for this stack and the floor (default 70% of lines, set in the test config), the before-commit row from their answers and overrides, and any invariants.
-- `git.md`: the deploy rule from their answer about shipping, and how branches work if they use them.
+- `git.md`: the deploy rule from their answer about shipping (or that nothing is deployed), and how branches work if they use them.
 - `git.md`: save points stay on unless the person turned them off; then write the override in its blank.
 - `parallel.md`: the mode, and how merges are approved (default: the operator says "merge" for each batch). Copy `tool-configs/board.json` to `.agents/board.json` and fill it in: the main branch, `checks` (the item-done commands from Commands, which `merge` runs before and after each merge), the number of builders at once (default 3), and `worktreeDir` only if the default sibling folder (`../<project>-worktrees`) won't work. A sibling folder keeps test runners in the main checkout from picking up builders' files; use `.worktrees` inside the project only if the tools cannot work outside it.
 - Wherever an override contradicts a default, reword the default to match.
@@ -141,7 +147,7 @@ Copy each template, replace every `{{...}}` with real content, and **delete any 
 
 ## Step 5. Install the guards and the board
 
-Copy `guards/guard.mjs` and `guards/precommit-guard.mjs` to `.agents/hooks/` in the project, and `scripts/board.mjs`, `scripts/keys.mjs`, `scripts/health.mjs` and `scripts/commands.mjs` to `.agents/scripts/`. If the person asked for no hooks, skip what they ruled out, record it as an override, and say in one sentence what it leaves open.
+Copy `guards/guard.mjs` and `guards/precommit-guard.mjs` to `.agents/hooks/` in the project, and `scripts/board.mjs`, `scripts/keys.mjs`, `scripts/health.mjs`, `scripts/commands.mjs` and `scripts/codex-guard.mjs` to `.agents/scripts/`. If the person asked for no hooks, skip what they ruled out, record it as an override, and say in one sentence what it leaves open.
 
 **Keep the skill in the project**, so `/ar-setup` and later updates work without downloading again: copy this whole skill folder (the one this file is in) to `.agents/skills/agent-ready/`, unless it is already there. If you were started from the paste-in prompt, delete `.agent-ready-download` once everything is copied.
 
@@ -152,7 +158,7 @@ Copy `guards/guard.mjs` and `guards/precommit-guard.mjs` to `.agents/hooks/` in 
 | Tool | Do this | Then tell the person |
 | --- | --- | --- |
 | Claude Code | Merge `tool-configs/claude-settings.json` into `.claude/settings.json` (the shared, committed file) | Restart Claude Code |
-| Codex | Merge `tool-configs/codex-config.toml` into `.codex/config.toml` | Trust the project, then approve the hook once with `/hooks`. Until then Codex skips it silently |
+| Codex | Merge `tool-configs/codex-config.toml` into `.codex/config.toml` | Switch it on once (Step 6). Until then Codex skips it silently |
 | Cursor | Merge `tool-configs/cursor-hooks.json` into `.cursor/hooks.json` | Restart Cursor |
 | OpenCode | Copy `tool-configs/opencode-plugin.js` to `.opencode/plugins/agent-ready-guard.js` | Restart OpenCode |
 | Gemini CLI or Antigravity | Merge `tool-configs/gemini-settings.json` into `.gemini/settings.json` | Hook support differs between versions; check with `/hooks` |
@@ -168,13 +174,16 @@ The commands are plain `node ...` lines that work in PowerShell, cmd, Git Bash, 
 
 ## Step 6. Prove the guards work
 
+Tell the person first, in one line: *"One check below should be blocked. If your tool shows it in red as failed or blocked, that is the protection working."*
+
 1. Run `node .agents/hooks/guard.mjs --self-test` and `node .agents/hooks/precommit-guard.mjs --self-test`. Every line must say PASS. Run `node .agents/scripts/board.mjs check`; it must pass (after Step 8 too, once the phase 1 plan exists).
 2. **Prove the hook is wired into the tool you are running in.** Create `.env.agent-ready-check` containing `AGENT_READY_CHECK=this-is-not-a-secret` with your file-writing tool (the guard allows this one file). Then try to read it with your normal file-reading tool.
-   - **Blocked:** the guard works here. Delete the file.
-   - **You could read it:** nothing leaked, it was only a decoy. Many tools load hooks only when they start, so this is expected straight after setup. Leave the decoy in place, ask the person to restart the tool (and, in Codex, approve the hook with `/hooks`), then run the test line in step 3 in the fresh session. If it still is not blocked, the wiring is wrong: check the path in the config and that `node` runs from the project folder.
+   - **Blocked:** the guard works here. Delete the file with your file tool or one plain command (`rm .env.agent-ready-check`, or `Remove-Item .env.agent-ready-check` in PowerShell). Keep that command on its own: wrapped in another command, a variable or an `if`, the guard blocks it too.
+   - **You could read it:** nothing leaked, it was only a decoy. Many tools load hooks only when they start, so this is expected straight after setup. Leave the decoy in place, ask the person to restart the tool, then run the test line in step 3 in the fresh session. If it still is not blocked, the wiring is wrong: check the path in the config and that `node` runs from the project folder.
 3. For every other tool in use, give the person this one line to paste there after restarting it: *"Create .env.agent-ready-check containing AGENT_READY_CHECK=1, then try to read it and tell me whether you were blocked."*
-4. If this is a git repo, stage the decoy with `git add -f .env.agent-ready-check` and run `node .agents/hooks/precommit-guard.mjs`. It must refuse. Then `git rm --cached -q .env.agent-ready-check` and delete the file.
-5. Run `node .agents/scripts/keys.mjs` to see which keys are still missing (names only), and `node .agents/scripts/health.mjs` (again after Step 8). Fix every FIX line. LOOK lines that need the person go on their to-do list.
+4. **Codex:** it runs the guard only after the person reviews and trusts it, once. Tell them: *"Open this project in the Codex app. When it shows a hook-approval icon in its bar, open it, check the command is `node .agents/hooks/guard.mjs`, and approve it. Typing `/hooks` in the app's chat won't work: that only works in Codex's terminal version."* If they don't see the icon (an older version, or the editor extension), offer the fallback: with their yes, run `node .agents/scripts/codex-guard.mjs`. It opens a window with Codex already running in the project and prints the four steps (trust the folder, `/hooks`, pick the agent-ready guard and choose Trust, `/quit`), or what to do if it can't. Never trust the hook for them, and never bypass the trust check.
+5. If this is a git repo, run `node .agents/hooks/precommit-guard.mjs --decoy-test`. It must print PASS. It stages a made-up secret file in a throwaway copy of git's staging area, so nothing real is staged and no file is left behind.
+6. Run `node .agents/scripts/keys.mjs` to see which keys are still missing (names only), and `node .agents/scripts/health.mjs` (again after Step 8). Fix every FIX line. A LOOK line the person can settle right now, such as a restart or switching on the guard in Codex, goes in your report as a step for now. Only work they will do later, outside the chat, goes on their to-do list.
 
 ## Step 7. Check for secrets that already leaked (existing projects)
 
@@ -188,8 +197,8 @@ The commands are plain `node ...` lines that work in PowerShell, cmd, Git Bash, 
 
 1. Write `docs/product.md` from `templates/docs/product.md`: one sentence, the problem, who it is for, what version 1 must do, what waits, and how you will know it works. If the idea is thin, shape it first, as "Shaping" in `docs/rules/workflow.md` says: one round of plain-words questions with suggested answers. Then write the phase 1 brief (`docs/build/phases/phase-1-<name>/brief.md` from `docs/build/templates/feature-brief.md`) from their answers.
 2. Write `docs/stack.md` from `templates/docs/stack.md` with the approved stack and its layout.
-3. **Roadmap:** in `docs/build/README.md`, list the phases. Phase 1 is a walking skeleton: the project skeleton in the folders the layout names, tests and CI on every push, **a first deploy of a nearly empty app** so shipping works before features exist, then the thinnest end-to-end slice of the core feature. Each later phase delivers one more thing the operator can try. Later phases get one line each (the goal only).
-4. **Phase 1 plan:** copy `docs/build/templates/phase-plan.md` to `docs/build/phases/phase-1-<name>/plan.md` and fill it in. Write stories as thin vertical slices, size S or M, each with Given/When/Then acceptance checks, a Tests line, Depends, and Touches in backticks (real paths from the layout, as specific as you can, because the board uses them to keep parallel agents apart). Group items into iterations so that items in the same iteration never depend on each other. Anything the operator must do goes in `docs/operator/todo.md` as an `op-` item, and the items that need it list its ID in `Depends`.
+3. **Roadmap:** in `docs/build/README.md`, list the phases. Phase 1 is a walking skeleton: the project skeleton in the folders the layout names, tests (and CI on every push, if the code is on GitHub), **a first release of a nearly empty app, shipped the way the real one will be** (deployed, published, or run from a fresh copy if nothing is hosted) so shipping works before features exist, then the thinnest end-to-end slice of the core feature. Each later phase delivers one more thing the operator can try. Later phases get one line each (the goal only).
+4. **Phase 1 plan:** copy `docs/build/templates/phase-plan.md` to `docs/build/phases/phase-1-<name>/plan.md` and fill it in. Write stories as thin vertical slices, size S or M, each with Given/When/Then acceptance checks, a Tests line, Depends, and Touches in backticks (real paths from the layout, as specific as you can, because the board uses them to keep parallel agents apart). Group items into iterations so that items in the same iteration never depend on each other. Anything the operator must do later, outside the chat (sign-ups, keys, payments, installs), goes in `docs/operator/todo.md` as an `op-` item in the format `docs/rules/docs.md` gives, and the items that need it list its ID in `Depends`. Approving the plan is not an entry: you ask for it in the chat.
 5. Everything from version 1 that is not in phase 1 goes into a later phase line or `docs/build/backlog.md`. Everything under "Not now" goes into the backlog's Later or Ideas section.
 6. Run `node .agents/scripts/board.mjs check` and fix anything it finds. Run `node .agents/scripts/board.mjs graph` so the person can see the plan as a picture in `docs/build/graph.md`.
 7. **Stop.** Ask the person to read `docs/product.md`, `docs/stack.md`, the phase 1 plan and their to-do list, and say yes before anything is built. Log their answers in `docs/build/decisions.md`.
@@ -207,13 +216,13 @@ Keep it short and plain:
 - **Overrides recorded:** each one, and what it changed.
 - **What the guards block:** reading or writing secret files, dumping environment variables, force push, hard reset, `git clean`, mass deletes, dropping tables, resetting a remote database, running downloaded scripts directly, skipping git hooks.
 - **What they do not do:** they are a seatbelt, not a vault. They catch the normal ways an agent reads a file, not every possible trick. Production keys belong in the host's secret settings.
-- **What the person still needs to do:** restarts, the Codex `/hooks` approval, the test line for other tools, replacing any leaked key, approving the phase 1 plan.
+- **What to do now, in this chat:** restart the tool, approve the guard in Codex (the hook-approval icon in the Codex app's bar), paste the test line in other tools, and say yes to the phase 1 plan. These are steps for now, not entries on the to-do list. Replacing a leaked key is the exception: it goes on the list.
 - **How to work from now on:**
   - Agents read `AGENTS.md` at the start of every session and load the rest only when needed. Most tools do this on their own.
   - Work moves phase by phase. `docs/build/README.md` always shows where things stand.
   - At the end of each phase, the agent suggests an adversarial review of the whole codebase and a cleanup. Say yes, or skip it.
   - Tell an agent "from now on..." and it becomes an override in `AGENTS.md` that every agent follows.
-  - Every finished item is saved as a save point you can go back to ("undo auth-003"). Nothing leaves your computer until you say **deploy**.
+  - Every finished item is saved as a save point you can go back to ("undo auth-003"). Nothing leaves your computer until you say so: the word they chose for shipping (for example **deploy**).
   - Before a new phase or a big feature, the agent asks you a few plain questions and writes a short brief for your yes. Every item is reviewed before it is saved.
   - Add keys yourself with `node .agents/scripts/keys.mjs add <NAME>`. It hides what you type and keeps the key out of the chat.
   - Something broken? Report it the way `docs/operator/guide.md` shows. Going live? Work through `docs/operator/launch.md` with an agent.

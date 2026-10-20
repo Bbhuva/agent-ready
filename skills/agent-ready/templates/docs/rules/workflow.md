@@ -4,7 +4,7 @@ Load this when you plan, claim, split, block on or finish an item. Several agent
 
 ## The shape of the work
 
-- **Phases are releases.** Each one ends with something the operator can try, not a pile of half-finished layers. Phase 1 is always a walking skeleton: the project runs, tests run on every push, a nearly empty app is deployed, and one thin slice of the core feature works end to end.
+- **Phases are releases.** Each one ends with something the operator can try, not a pile of half-finished layers. Phase 1 is always a walking skeleton: the project runs, tests run (on every push, if the code is on GitHub), a nearly empty app ships the way the real one will (deployed, published, or run from a fresh copy if nothing is hosted), and one thin slice of the core feature works end to end.
 - **Items are the work inside a phase.** Most are stories: a thin slice through every layer (screen, logic, data) that a user would notice. Each one fits in one working session.
 - **The backlog** (`docs/build/backlog.md`) holds everything not yet planned into a phase, most important first. New ideas go there, not into the current phase, unless the operator says now.
 - **Plan one phase at a time.** Later phases stay one line each in `docs/build/README.md` until their turn, because what you learn now will change them.

@@ -75,7 +75,7 @@ Already use the skills installer? `npx skills add Bbhuva/agent-ready`, then tell
 
 The agent downloads the skill, looks around, and asks you at most five questions (each with a suggested answer). Then it shows you every file it will create and asks **once** for permission to create them all, with a tip for your tool so it doesn't stop at every file. After your yes it builds the whole structure in one go. It never overwrites your files, never reads your `.env`, and never commits during setup. A copy of the skill stays in `.agents/skills/agent-ready/`, so `/ar-setup` can check or update the setup later without downloading again.
 
-**No tech stack in mind?** For a new project it adds five quick questions (where people use it, what it needs, how big and how sensitive, what you already know or use, your budget), then recommends a stack with the reasons, the monthly cost and the accounts you need, plus one alternative.
+**No tech stack in mind?** For a new project it adds five quick questions (where it runs, where people use it, what it needs, which languages you already know, and how big, how sensitive and what budget). Then it recommends a stack that fits what you are building, with the reasons, the monthly cost and the accounts you need, plus one alternative. There is no house stack: a language you know is suggested when it does the job well, and you're told plainly when it would hold you back. A tool that runs only on your computer gets a local setup, with no hosting and no cloud accounts.
 
 **Your instructions win.** Anything you tell it, like "don't run checks on each commit" or "use Python", beats its defaults. Standing instructions are written into `AGENTS.md` as overrides, so every agent after it follows them too.
 
@@ -156,7 +156,7 @@ When the guard blocks something, the agent is told not to look for another way a
 | Tool | Reads the rulebook | Guard | How it was checked |
 | --- | --- | --- | --- |
 | Claude Code | Through `CLAUDE.md` (`@AGENTS.md`) | `PreToolUse` hook plus deny rules in `.claude/settings.json` | Exact hook command run through bash, cmd and PowerShell with Claude Code's documented input |
-| Codex | Yes | `PreToolUse` hook in `.codex/config.toml`. Approve it once with `/hooks` | Same |
+| Codex | Yes | `PreToolUse` hook in `.codex/config.toml`. Approve it once from the hook-approval icon in the Codex app's bar. No icon? `node .agents/scripts/codex-guard.mjs` opens Codex's terminal version for you and says what to press | Same |
 | Cursor | Yes | `beforeReadFile` and `beforeShellExecution` in `.cursor/hooks.json` | Same |
 | OpenCode | Yes | Plugin in `.opencode/plugins/` | Plugin loaded and called in the test suite |
 | Gemini CLI, Antigravity | Yes | `BeforeTool` hook in `.gemini/settings.json` | Documented input format only |
@@ -181,7 +181,7 @@ Open questions:
 - **Going live?** Work through `docs/operator/launch.md` with an agent: spending limits, legal basics, domain and email, phones, backups.
 - **Now and then,** ask for `node .agents/scripts/health.mjs`. It tells you in plain words whether the setup is still sound.
 - **Say "from now on..."** and it becomes an override in `AGENTS.md` that every agent follows.
-- **Every finished item becomes a save point** you can go back to ("undo auth-003"). Nothing leaves your computer until you say **deploy**.
+- **Every finished item becomes a save point** you can go back to ("undo auth-003"). Nothing leaves your computer until you say so (for example **deploy**), and how it ships fits your project: a host, an app store, a package, or nowhere at all.
 - **`docs/operator/todo.md` is your to-do list.** When an agent needs you to install something, sign up, add a key or pay, it adds an entry with exact steps and carries on with other work. Say "op-003 done" when you finish one. Never paste a key into the chat; each entry says where it goes.
 - `docs/operator/mtest.md` is your list of checks only you can do. Report results by ID.
 - `docs/operator/guide.md` explains how to run, ship and undo things, in plain words.

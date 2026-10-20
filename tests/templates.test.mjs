@@ -75,6 +75,13 @@ test("the operator's files live in docs/operator, and nothing but documents ship
   assert.deepEqual(notDocs, []);
 });
 
+test("the operator's to-do list holds only their list; the entry format lives in the agents' rules", () => {
+  const todo = read(path.join(templates, "docs", "operator", "todo.md"));
+  assert.doesNotMatch(todo, /How agents write|op-NNN|```/, "no instructions for agents in the operator's file");
+  assert.match(todo, /## Waiting on you/);
+  assert.match(read(path.join(templates, "docs", "rules", "docs.md")), /- \[ \] \*\*op-NNN\*\* Short title/);
+});
+
 test("the health check expects exactly the docs the templates ship", async () => {
   const source = read(path.join(skillDir, "scripts", "health.mjs"));
   const expected = [...source.matchAll(/"(docs\/[^"]+\.md)"/g)].map((m) => m[1]);
