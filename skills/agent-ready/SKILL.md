@@ -99,6 +99,7 @@ Copy each template, replace every `{{...}}` with real content, and **delete any 
 | `docs/operator/todo.md` | `templates/docs/operator/todo.md` | The operator's to-do list: installs, sign-ups, keys, payments |
 | `docs/operator/mtest.md` | `templates/docs/operator/mtest.md` | Checks only a human can do, with IDs |
 | `docs/operator/guide.md` | `templates/docs/operator/guide.md` | How to run and look after the project, in plain words |
+| `docs/operator/run.md` | `templates/docs/operator/run.md` | The run card: the commands to start, stop, test and build it, on one page |
 | `docs/architecture.md` | `templates/docs/architecture.md` | How the parts fit together |
 | `docs/changelog.md` | `templates/docs/changelog.md` | What changed for users, in plain words |
 | `docs/build/README.md` | `templates/docs/build/README.md` | The roadmap and the current phase |
@@ -134,6 +135,7 @@ Copy each template, replace every `{{...}}` with real content, and **delete any 
 
 - `docs/operator/todo.md`: one `op-` entry for everything the person must do before or during phase 1: tools missing from this computer (from Step 1), every account the stack needs, a spending limit and billing alert for every paid one, every API key (named in `.env.example`, entered with `node .agents/scripts/keys.mjs add <NAME>`), a first save point if parallel mode needs one. Exact steps in plain words, most urgent first.
 - `docs/words.md`: the project's own nouns from the idea (the people, the things they make or manage), one name each, plus any technical words you will use with them.
+- `docs/operator/run.md`, the run card: the real commands, from what Step 1 found. In a project without code yet, fill in what the stack already tells you, and in each row that needs code write `Not ready yet (<id> sets it up)`, naming the phase 1 item that makes it run. That item fills the row in before it counts as done, and the health check flags a row still waiting on a finished item. Once the commands work, if the person uses VS Code or Cursor, offer to add the same commands as tasks in `.vscode/tasks.json`, so they can run them from Terminal, Run Task, without typing.
 - `docs/operator/launch.md`: copy it, fill in the project name, and delete the sections that clearly don't apply (for example payments, if there are none), saying why.
 - `docs/operator/guide.md`: fill in what is known now (what it is, where it will live, accounts and costs). Keep the plain-words model guidance: start with the current settings for small, clear tasks, explain a recommended change when the work calls for it, and give exact tool-specific steps only from verified options. Follow Models and thinking settings in `docs/rules/workflow.md`; the skill does not itself switch the active model. Mark the rest "filled in by phase 1", and make keeping it current part of the phase 1 items that set those things up.
 - `docs/architecture.md`: the planned parts from the stack, or the real parts for an existing project.
@@ -147,11 +149,13 @@ Copy each template, replace every `{{...}}` with real content, and **delete any 
 
 ## Step 5. Install the guards and the board
 
-Copy `guards/guard.mjs` and `guards/precommit-guard.mjs` to `.agents/hooks/` in the project, and `scripts/board.mjs`, `scripts/keys.mjs`, `scripts/health.mjs`, `scripts/commands.mjs` and `scripts/codex-guard.mjs` to `.agents/scripts/`. If the person asked for no hooks, skip what they ruled out, record it as an override, and say in one sentence what it leaves open.
+Copy `guards/guard.mjs` and `guards/precommit-guard.mjs` to `.agents/hooks/` in the project, and `scripts/board.mjs`, `scripts/keys.mjs`, `scripts/health.mjs`, `scripts/commands.mjs`, `scripts/codex-guard.mjs` and `scripts/update.mjs` to `.agents/scripts/`. If the person asked for no hooks, skip what they ruled out, record it as an override, and say in one sentence what it leaves open.
 
 **Keep the skill in the project**, so `/ar-setup` and later updates work without downloading again: copy this whole skill folder (the one this file is in) to `.agents/skills/agent-ready/`, unless it is already there. If you were started from the paste-in prompt, delete `.agent-ready-download` once everything is copied.
 
 **Install the commands.** Copy `commands/` to `.agents/commands/`, then run `node .agents/scripts/commands.mjs install --tools <the tools in use>` (any of `claude`, `cursor`, `gemini`, `opencode`). It writes `/ar-help`, `/ar-status` and the rest into each tool's own command folder, and the list for the person into `docs/operator/commands.md`. Codex keeps commands in the person's home folder, not the project: if they use Codex, ask before adding `--codex` (they then type `/prompts:ar-help`). Antigravity and any other tool: the person types the name without the slash, like "ar-status", and `AGENTS.md` tells the agent where to find it.
+
+**Record the version.** Once the files above and the skill copy are in place, run `node .agents/scripts/update.mjs --record`. It saves the version and a fingerprint of each of agent-ready's own files in `.agents/agent-ready.json`, so `/ar-update` can later tell them apart from changes made here.
 
 **Wire `guard.mjs` into every tool in use.** Merge, never replace, existing settings and hooks:
 
@@ -212,7 +216,8 @@ Keep it short and plain:
 - **What is set up:** one line per group (the map, the rules, the roadmap and phase plan, the backlog, decisions, words, the operator's folder, handoffs, known problems, the board, the guards, the key helper, the health check, the git check).
 - **Health:** the last line of `health.mjs`, and anything still to fix.
 - **Your to-do list:** how many entries `docs/operator/todo.md` has, and the first one to do.
-- **Your commands:** "Type `/ar-help` any time to see them all." Name the five they will use most: `/ar-status`, `/ar-next`, `/ar-todo`, `/ar-bug`, `/ar-undo`.
+- **Your commands:** "Type `/ar-help` any time to see them all." Name the ones they will use most: `/ar-status`, `/ar-next`, `/ar-run`, `/ar-test`, `/ar-todo`, `/ar-bug`, `/ar-undo`. Later, `/ar-update` brings in a newer agent-ready.
+- **Run it yourself:** `docs/operator/run.md` has the commands to start, stop, test and build it, on one page (rows that need code say which item fills them in).
 - **Overrides recorded:** each one, and what it changed.
 - **What the guards block:** reading or writing secret files, dumping environment variables, force push, hard reset, `git clean`, mass deletes, dropping tables, resetting a remote database, running downloaded scripts directly, skipping git hooks.
 - **What they do not do:** they are a seatbelt, not a vault. They catch the normal ways an agent reads a file, not every possible trick. Production keys belong in the host's secret settings.
@@ -233,6 +238,8 @@ Keep it short and plain:
   - When an agent makes a call on its own, it is in `docs/build/decisions.md`. Skim it now and then.
 
 ## Running this skill again
+
+**Already set up, and this is a newer agent-ready?** Update instead of setting up again. Run `node .agents/scripts/update.mjs` in the project, or, from a fresh download, `node .agent-ready-download/skills/agent-ready/scripts/update.mjs --from .agent-ready-download`, and follow the steps in `commands/ar-update.md`. It replaces only agent-ready's own files, keeps any changed here, and never replaces a document: an agent offers the document changes one at a time. Delete `.agent-ready-download` afterwards.
 
 If the project is already set up, run `node .agents/scripts/health.mjs` first: it shows what is missing or broken. Then compare with these templates and add only what is missing. Never reset or shorten existing documents, and never remove rules or overrides the person added.
 

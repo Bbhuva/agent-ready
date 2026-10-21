@@ -132,6 +132,34 @@ test("health fails on code in docs/, an unfilled map and a tool without the guar
   }
 });
 
+test("health keeps the run card true: rows still waiting on a finished item, and scripts that don't exist", () => {
+  const root = setUpProject();
+  try {
+    mkdirSync(path.join(root, "docs", "build", "phases", "phase-1-skeleton"), { recursive: true });
+    writeFileSync(
+      path.join(root, "docs", "build", "phases", "phase-1-skeleton", "plan.md"),
+      "# Phase 1: skeleton\n\n## Iteration A: base\n\n- [x] **ops-001** Skeleton `task · S · Must`\n  - **Depends:** none\n  - **Touches:** `package.json`\n- [ ] **ops-002** Builds `task · S · Must`\n  - **Depends:** ops-001\n  - **Touches:** `build/`\n",
+    );
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }));
+    const card = (rows) => writeFileSync(path.join(root, "docs", "operator", "run.md"), `# Run it yourself\n\n| You want to | Type this | You'll see |\n| --- | --- | --- |\n${rows}\n`);
+    const runCard = () => runHealth(root).find((r) => /run card/.test(r.title));
+
+    card("| Start it | `npm run dev` | Ready |\n| Run the tests | Not ready yet (ops-001 sets it up) | |\n| Build it | Not ready yet (ops-002 sets it up) | |\n| Install | `npm install` | |");
+    const stale = runCard();
+    assert.equal(stale?.status, "warn");
+    assert.match(stale.detail, /"Not ready yet" for ops-001, which is done/);
+    assert.doesNotMatch(stale.detail, /ops-002/, "a row waiting on an unfinished item is fine");
+    assert.match(stale.detail, /`npm run dev` needs a "dev" script in package\.json/);
+    assert.doesNotMatch(stale.detail, /npm install/, "the package manager's own words aren't scripts");
+
+    card("| Start it | `npm run dev` | Ready |\n| Run the tests | `npm test` | 3 passed |");
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ scripts: { dev: "vite", test: "vitest run" } }));
+    assert.equal(runCard()?.status, "ok", "a filled-in, true run card is OK");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("health on an empty folder says the setup is missing", () => {
   const root = folder();
   const results = runHealth(root);

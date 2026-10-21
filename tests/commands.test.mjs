@@ -24,6 +24,8 @@ test("commands load in a sensible order, help first", () => {
   const names = loadCommands(root).map((c) => c.name);
   assert.equal(names.length, COUNT);
   assert.equal(names[0], "ar-help");
+  assert.deepEqual(names.slice(2, 5), ["ar-next", "ar-run", "ar-test"], "running and testing sit with the everyday loop");
+  assert.equal(names.at(-1), "ar-update");
   assert.ok(names.includes("ar-status") && names.includes("ar-undo") && names.includes("ar-coordinate"));
   for (const c of loadCommands(root)) assert.ok(c.description.length > 10, c.name);
 });

@@ -75,6 +75,6 @@ Order of authority: the operator in chat, then the overrides above, then this fi
 | What | Where |
 | --- | --- |
 | Plans, rules, decisions, words and other documents | `docs/` |
-| The operator's to-do list, manual checks, guide and launch list | `docs/operator/` |
+| The operator's run card, to-do list, manual checks, guide and launch list | `docs/operator/` |
 | Agent tools: guards, scripts, commands, and this setup's skill | `.agents/` |
 {{MAP_ROWS: the code folders from the Layout in `docs/stack.md`, e.g. "| Web app | `apps/web` |", "| Shared code | `packages/` |"}}

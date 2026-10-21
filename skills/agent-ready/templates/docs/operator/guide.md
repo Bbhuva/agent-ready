@@ -8,6 +8,7 @@ Type `/ar-help` in your agent's chat to see every command, or open `docs/operato
 
 - `/ar-status`: where things stand, and what is waiting on you.
 - `/ar-next`: build the next piece.
+- `/ar-run` and `/ar-test`: start it and get the link, or check that everything works, without typing commands.
 - `/ar-todo`: your to-do list. `/ar-todo op-003 done` when you have done one.
 - `/ar-bug what happened`: report a problem.
 - `/ar-undo auth-003`: go back to before a finished item.
@@ -20,7 +21,7 @@ In a tool that doesn't show these commands, type the name without the slash, lik
 
 ## Run it on your computer
 
-{{Numbered steps from a fresh computer: what to install (point to the entries in `docs/operator/todo.md`), the commands to run, what you should see, and how to stop it.}}
+The commands to start it, stop it, test it and build it are on one page: `docs/operator/run.md`. Or ask an agent: `/ar-run` starts it and gives you the link.
 
 ## See it live
 

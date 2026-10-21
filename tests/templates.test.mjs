@@ -75,6 +75,20 @@ test("the operator's files live in docs/operator, and nothing but documents ship
   assert.deepEqual(notDocs, []);
 });
 
+test("the skill's version is one number, in VERSION and package.json, with a What's new entry", () => {
+  const version = read(path.join(skillDir, "VERSION")).trim();
+  assert.match(version, /^\d+\.\d+\.\d+$/);
+  assert.equal(JSON.parse(read(path.join(skillDir, "..", "..", "package.json"))).version, version);
+  assert.match(read(path.join(skillDir, "CHANGES.md")), new RegExp(`^## ${version.replace(/\./g, "\\.")} \\(\\d{4}-\\d{2}-\\d{2}\\)`, "m"));
+});
+
+test("the run card has a row for each thing the operator does, and points to the commands", () => {
+  const card = read(path.join(templates, "docs", "operator", "run.md"));
+  for (const row of ["Start it", "Open it", "Stop it", "Run the tests", "Build it", "After getting new changes", "Check the setup"]) assert.match(card, new RegExp(`\\| ${row} \\|`), row);
+  assert.match(card, /\/ar-run/);
+  assert.match(card, /\/ar-test/);
+});
+
 test("the operator's to-do list holds only their list; the entry format lives in the agents' rules", () => {
   const todo = read(path.join(templates, "docs", "operator", "todo.md"));
   assert.doesNotMatch(todo, /How agents write|op-NNN|```/, "no instructions for agents in the operator's file");

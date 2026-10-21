@@ -23,7 +23,7 @@ import { pathToFileURL } from "node:url";
 export const MARK = "made by agent-ready";
 
 // The order the list shows them in: help first, then the everyday loop.
-const ORDER = ["ar-help", "ar-status", "ar-next", "ar-todo", "ar-keys", "ar-shape", "ar-plan", "ar-review", "ar-bug", "ar-undo", "ar-deploy", "ar-handoff", "ar-explain", "ar-rule", "ar-health", "ar-launch", "ar-coordinate", "ar-setup"];
+const ORDER = ["ar-help", "ar-status", "ar-next", "ar-run", "ar-test", "ar-todo", "ar-keys", "ar-shape", "ar-plan", "ar-review", "ar-bug", "ar-undo", "ar-deploy", "ar-handoff", "ar-explain", "ar-rule", "ar-health", "ar-launch", "ar-coordinate", "ar-setup", "ar-update"];
 
 const note = (name) => `${MARK}: edit .agents/commands/${name}.md, then run node .agents/scripts/commands.mjs install`;
 const yamlString = (text) => `"${String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;

@@ -89,7 +89,7 @@ Skip shaping only for small fixes, or when the operator says to.
 - The tests `docs/rules/testing.md` asks for are written and pass. Lint and type checks are clean, with no new warnings.
 - The item review in `docs/rules/review.md` found nothing left to fix.
 - No debug output, commented-out code, or TODO without an item ID is left behind.
-- The docs it affects are updated, as `docs/rules/docs.md` says.
+- The docs it affects are updated, as `docs/rules/docs.md` says. If it adds or changes a command the operator uses (start, test, build, install), the run card `docs/operator/run.md` says so, and a row waiting on this item (`Not ready yet (<id> sets it up)`) is filled in.
 - Checks only a human can do are in `docs/operator/mtest.md`, linked to the item ID.
 - Decisions you made alone are in `docs/build/decisions.md`. New gotchas are in `docs/learning.md`.
 - The item has its `**Done:**` line, it is saved as a save point, its claim is released, and the phase status in `docs/build/README.md` is updated.

@@ -35,6 +35,7 @@ agent-ready fixes this with plain files and six small scripts. No service, no ac
 | `docs/build/backlog.md` | Everything wanted but not yet planned into a phase, most important first. |
 | `docs/build/decisions.md` | Every decision, with the reason, so nobody asks twice and no agent reverses one by accident. |
 | `docs/build/graph.md` | Made by the board: a Mermaid picture of the dependencies, and which items touch which files. |
+| `docs/operator/run.md` | **Run it yourself:** the commands to start it, stop it, test it and build it, on one page, with what you should see. Agents keep it true as the project changes. |
 | `docs/operator/todo.md` | **Your to-do list:** everything an agent can't do for you, such as installing software, signing up, adding an API key or paying, with exact steps in plain words. |
 | `docs/operator/mtest.md` | Checks only you can do (a real phone, a dashboard, a payment), with IDs, so you report "MTEST-AUTH-001 passed" and the agent knows what that means. |
 | `docs/operator/guide.md` | How to run your project in plain words: start it, see it live, add a key, go back to a save point, try a change before it goes live, ship, undo a bad deploy, report a problem, keep costs down. Agents keep it current. |
@@ -49,7 +50,8 @@ agent-ready fixes this with plain files and six small scripts. No service, no ac
 | `.agents/scripts/board.mjs` | The board: shows what is ready and who holds what, refuses claims on items or files already being worked on, checks the plans for circular dependencies, draws the graph, and in parallel mode starts builders in their own worktrees and merges them in order. |
 | `.agents/scripts/keys.mjs` | You add a key in your own terminal without it showing on screen or going into a chat. Agents can check which keys are set without ever seeing a value. |
 | `.agents/commands/`, `.agents/scripts/commands.mjs` | Your `/ar-` commands, written once and installed into each tool's own format. `docs/operator/commands.md` lists them. |
-| `.agents/skills/agent-ready/` | A copy of this skill, so `/ar-setup` can check or update the setup without downloading again. |
+| `.agents/skills/agent-ready/` | A copy of this skill, so `/ar-setup` can check the setup without downloading again. |
+| `.agents/scripts/update.mjs`, `.agents/agent-ready.json` | The updater, and its record of the installed version and of agent-ready's own files, so an update can tell them apart from your changes. |
 | `.agents/scripts/health.mjs` | Checks the whole setup in plain words: the map, the docs, whether each tool runs the guard, the secret check on commits, the plans, missing keys, leftover worktrees. |
 | `.agents/hooks/guard.mjs` | Blocks agents from reading secret files and running destructive commands. In parallel work it also blocks writes into files another agent has claimed: structured edits, and shell commands that name the file they write (it can't see what scripts or build tools write). |
 | `.agents/hooks/precommit-guard.mjs` | Refuses any commit that adds a secret file or a real-looking API key, whoever makes it. |
@@ -73,7 +75,9 @@ My project: <your idea, or "existing project">
 
 Already use the skills installer? `npx skills add Bbhuva/agent-ready`, then tell your agent *"Set up this project with agent-ready"*, with your idea in the same message.
 
-The agent downloads the skill, looks around, and asks you at most five questions (each with a suggested answer). Then it shows you every file it will create and asks **once** for permission to create them all, with a tip for your tool so it doesn't stop at every file. After your yes it builds the whole structure in one go. It never overwrites your files, never reads your `.env`, and never commits during setup. A copy of the skill stays in `.agents/skills/agent-ready/`, so `/ar-setup` can check or update the setup later without downloading again.
+The agent downloads the skill, looks around, and asks you at most five questions (each with a suggested answer). Then it shows you every file it will create and asks **once** for permission to create them all, with a tip for your tool so it doesn't stop at every file. After your yes it builds the whole structure in one go. It never overwrites your files, never reads your `.env`, and never commits during setup. A copy of the skill stays in `.agents/skills/agent-ready/`, so `/ar-setup` can check the setup later without downloading again.
+
+**Updating.** Type `/ar-update`. It shows the version you have, the newest one and what's new, and waits for your yes. Then it replaces agent-ready's own files (the guards, scripts and commands), keeps any you changed, and never replaces your documents: an agent offers each document change one at a time. Projects set up before version 1.0.0 have no `/ar-update` yet; paste the install prompt above and the agent updates instead of setting up again.
 
 **No tech stack in mind?** For a new project it adds five quick questions (where it runs, where people use it, what it needs, which languages you already know, and how big, how sensitive and what budget). Then it recommends a stack that fits what you are building, with the reasons, the monthly cost and the accounts you need, plus one alternative. There is no house stack: a language you know is suggested when it does the job well, and you're told plainly when it would hold you back. A tool that runs only on your computer gets a local setup, with no hosting and no cloud accounts.
 
@@ -88,6 +92,8 @@ Type these in your agent's chat. Forgot one? `/ar-help` lists them all, and so d
 | `/ar-help` | Lists every command, and suggests the ones that fit right now |
 | `/ar-status` | Where the project stands: the phase, what's ready, in progress or waiting, and your to-dos |
 | `/ar-next [item]` | Takes the next ready item and sees it through: claim, build, check, review, save |
+| `/ar-run` | Starts the app on your computer and gives you the link, with no commands to type |
+| `/ar-test` | Runs all the checks and tells you in plain words whether everything works |
 | `/ar-todo [op-ID done]` | What the agents need from you, or marks one done |
 | `/ar-keys` | Which keys are set or missing (names only), and how to add one safely |
 | `/ar-shape [idea]` | Talks a new phase or feature through, and agrees a short brief before planning |
@@ -102,7 +108,8 @@ Type these in your agent's chat. Forgot one? `/ar-help` lists them all, and so d
 | `/ar-health` | Checks the setup is still sound |
 | `/ar-launch` | Goes through the before-you-go-live checklist |
 | `/ar-coordinate` | Runs several agents at once, and merges their work in order |
-| `/ar-setup` | Sets up the project, or checks and updates the setup |
+| `/ar-setup` | Sets up the project, or checks the setup |
+| `/ar-update` | Gets the newest agent-ready, without touching your documents or plans |
 
 They are written once, in `.agents/commands/`, and `node .agents/scripts/commands.mjs install` turns them into each tool's own format:
 

@@ -1,6 +1,6 @@
 {
   "name": "agent-ready",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "A skill that sets up any project for AI coding agents: a short AGENTS.md map, on-demand rules, agile phase plans, testing and coverage rules, phase-end reviews, a decision log, a manual test queue, handoffs, and guards that keep agents away from your secrets.",
   "type": "module",

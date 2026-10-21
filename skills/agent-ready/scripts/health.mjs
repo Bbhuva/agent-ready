@@ -20,7 +20,9 @@ import { detectTools, loadCommands, TOOLS } from "./commands.mjs";
 
 const MAP_LIMIT = 100;
 const RULES = ["workflow", "parallel", "testing", "docs", "git", "review", "bugs"].map((name) => `docs/rules/${name}.md`);
-const DOCS = ["docs/build/README.md", "docs/build/backlog.md", "docs/build/decisions.md", "docs/operator/todo.md", "docs/operator/mtest.md", "docs/operator/guide.md", "docs/operator/launch.md", "docs/words.md", "docs/stack.md", "docs/security.md"];
+const DOCS = ["docs/build/README.md", "docs/build/backlog.md", "docs/build/decisions.md", "docs/operator/todo.md", "docs/operator/mtest.md", "docs/operator/guide.md", "docs/operator/run.md", "docs/operator/launch.md", "docs/words.md", "docs/stack.md", "docs/security.md"];
+// Package manager words that are not the project's own scripts.
+const PACKAGE_BUILTINS = new Set(["install", "i", "ci", "add", "remove", "rm", "uninstall", "update", "up", "upgrade", "exec", "dlx", "x", "create", "init", "link", "outdated", "audit", "why"]);
 const CODE_FILES = /\.(m?[jt]sx?|cjs|py|rb|go|rs|java|kt|swift|php|cs|sh|ps1|bat|sql|css|scss|vue|svelte|astro)$/i;
 
 const read = (file) => {
@@ -43,6 +45,35 @@ function walk(dir, skip = () => false) {
     if (skip(full)) return [];
     return entry.isDirectory() ? walk(full, skip) : [full];
   });
+}
+
+// The run card is what the operator types themselves, so it must be true:
+// rows waiting on an item that is done, and npm, pnpm, yarn or bun commands
+// whose script package.json doesn't have, are problems.
+export function runCardProblems(root, board) {
+  const text = read(path.join(root, "docs", "operator", "run.md"));
+  if (text === null) return [];
+  const problems = [];
+  const done = new Set((board?.items ?? []).filter((item) => item.status === "done").map((item) => item.id));
+  const stale = [...new Set([...text.matchAll(/Not ready yet \(([\w.-]+) sets it up\)/gi)].map((m) => m[1]))].filter((id) => done.has(id));
+  if (stale.length) problems.push(`It still says "Not ready yet" for ${stale.join(", ")}, which ${stale.length > 1 ? "are" : "is"} done. Fill in the real commands.`);
+  let scripts = null;
+  try {
+    scripts = JSON.parse(read(path.join(root, "package.json")) ?? "null")?.scripts ?? null;
+  } catch {
+    scripts = null;
+  }
+  if (scripts) {
+    for (const [, command] of text.matchAll(/`([^`\n]+)`/g)) {
+      const words = command.trim().match(/^(npm|pnpm|yarn|bun)\s+(run\s+|run-script\s+)?([\w:.-]+)/);
+      if (!words || words[3].startsWith("-")) continue;
+      const [, tool, run, name] = words;
+      if (!run && (tool === "npm" ? !["test", "t", "start"].includes(name) : PACKAGE_BUILTINS.has(name))) continue;
+      const script = name === "t" ? "test" : name;
+      if (!(script in scripts)) problems.push(`\`${command.trim()}\` needs a "${script}" script in package.json, and there is none.`);
+    }
+  }
+  return problems;
 }
 
 export function runHealth(root) {
@@ -76,6 +107,17 @@ export function runHealth(root) {
   const code = docFiles.filter((file) => CODE_FILES.test(file) && !rel(file).startsWith("docs/reference/")).map(rel);
   if (code.length) add("fail", "Code is sitting in docs/", `${code.join(", ")}. docs/ holds documents only; move these to the folders in docs/stack.md.`);
   else add("ok", "docs/ holds documents only");
+
+  // Which agent-ready this is, so /ar-update can move it on.
+  const installed = read(path.join(root, ".agents", "agent-ready.json"));
+  let version = null;
+  try {
+    version = installed && JSON.parse(installed).version;
+  } catch {
+    version = null;
+  }
+  if (version) add("ok", `agent-ready ${version} (type /ar-update for a newer one)`);
+  else if (existsSync(path.join(root, ".agents"))) add("warn", "There is no record of which agent-ready version this is", "Run node .agents/scripts/update.mjs --record, so /ar-update can tell agent-ready's files from changes made here.");
 
   // The guards.
   const guard = path.join(root, ".agents", "hooks", "guard.mjs");
@@ -133,6 +175,14 @@ export function runHealth(root) {
     for (const warning of warnings) add("warn", "A claim needs a look", warning);
     const open = board.items.filter((item) => item.phase === "operator" && item.status === "todo");
     if (open.length) add("warn", `${open.length} thing${open.length > 1 ? "s" : ""} on your to-do list`, open.map((item) => `${item.id} ${item.title}`).join("; "));
+  }
+
+  // The run card the operator types from.
+  const card = read(path.join(root, "docs", "operator", "run.md"));
+  if (card !== null) {
+    const problems = runCardProblems(root, existsSync(path.join(root, "docs", "build")) ? loadBoard(root) : null);
+    if (problems.length) add("warn", "The run card in docs/operator/run.md needs a look", problems.join(" "));
+    else if (!card.includes("{{") && !/Not ready yet/i.test(card)) add("ok", "The run card is ready (docs/operator/run.md)");
   }
 
   // Keys: names only, never values.

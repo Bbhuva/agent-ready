@@ -12,6 +12,7 @@ Docs change in the same item as the code they describe. An item is not done whil
 | `README.md` (the root, and one per app in `apps/`) | Developers | Setup steps, commands or the folder layout change |
 | `docs/architecture.md` | Everyone | You add an app, a service, a table or an outside API, or change how the parts talk to each other |
 | `docs/operator/guide.md` | The operator, in plain words | Anything they do changes: running it, adding a key, deploying, undoing a deploy, where to look when it breaks, what it costs |
+| `docs/operator/run.md` | The operator, who types these themselves | A command to start, stop, test, build or install changes, or a row that said "Not ready yet" can now be filled in |
 | `docs/operator/todo.md` | The operator | You need them to do something (see below) |
 | `docs/operator/launch.md` | The operator | Something on the launch list changes: a new paid service, a new kind of user data, a new email the app sends |
 | `docs/words.md` | Everyone | A new thing gets a name, or you notice two names for one thing |
