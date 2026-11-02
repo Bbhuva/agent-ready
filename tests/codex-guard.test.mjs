@@ -41,7 +41,7 @@ test("--print gives the steps, or how to install Codex's command-line tool, with
     mkdirSync(path.join(dir, ".codex"));
     writeFileSync(path.join(dir, ".codex", "config.toml"), "");
     const out = run(dir, "--print");
-    if (out.code === 0) assert.match(out.out, /^Open a terminal in this project folder/, "with --print it never opens a window");
+    if (out.code === 0) assert.match(out.out, /^First, quit the Codex app[^\n]*\nOpen a terminal in this project folder/, "with --print it never opens a window, and asks to quit the app first");
     else assert.match(out.out, /npm install -g @openai\/codex/);
   } finally {
     rmSync(dir, { recursive: true, force: true });

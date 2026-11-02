@@ -162,7 +162,7 @@ Copy `guards/guard.mjs` and `guards/precommit-guard.mjs` to `.agents/hooks/` in 
 | Tool | Do this | Then tell the person |
 | --- | --- | --- |
 | Claude Code | Merge `tool-configs/claude-settings.json` into `.claude/settings.json` (the shared, committed file) | Restart Claude Code |
-| Codex | Merge `tool-configs/codex-config.toml` into `.codex/config.toml` | Switch it on once (Step 6). Until then Codex skips it silently |
+| Codex | Merge `tool-configs/codex-config.toml` into the project's own `.codex/config.toml`. Never edit Codex's settings in the home folder (`~/.codex/config.toml`): Codex manages that file itself | Switch it on once (Step 6). Until then Codex skips it silently |
 | Cursor | Merge `tool-configs/cursor-hooks.json` into `.cursor/hooks.json` | Restart Cursor |
 | OpenCode | Copy `tool-configs/opencode-plugin.js` to `.opencode/plugins/agent-ready-guard.js` | Restart OpenCode |
 | Gemini CLI or Antigravity | Merge `tool-configs/gemini-settings.json` into `.gemini/settings.json` | Hook support differs between versions; check with `/hooks` |

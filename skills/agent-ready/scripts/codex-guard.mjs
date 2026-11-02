@@ -6,7 +6,8 @@
 // approve it there. This is the fallback for when that icon is missing (an
 // older version, or the editor extension): it opens a terminal window already
 // running Codex in the project folder, and says what to press. It never trusts
-// the hook itself: the person reviews it and decides.
+// the hook itself, and it never edits Codex's settings file: the person
+// reviews the hook in Codex, and Codex records the answer.
 //
 //   node .agents/scripts/codex-guard.mjs           open the window and print the steps
 //   node .agents/scripts/codex-guard.mjs --print   only print the steps
@@ -20,6 +21,7 @@ const HOOK = "node .agents/hooks/guard.mjs";
 
 export function steps(opened) {
   return [
+    "First, quit the Codex app if it is open, so only one copy of Codex changes its settings at a time.",
     opened ? "A window with Codex running in this project has opened. In it:" : "Open a terminal in this project folder, type codex and press Enter. Then:",
     "  1. If Codex asks whether to trust this folder, choose yes.",
     "  2. Type /hooks and press Enter.",

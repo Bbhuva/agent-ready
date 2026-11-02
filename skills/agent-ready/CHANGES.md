@@ -2,6 +2,17 @@
 
 Newest first. `/ar-update` shows the entries between your version and the new one. Its tool files (the guards, the scripts and the commands) are updated for you. Your documents never are: each "For your documents" list below is what an agent offers to change in them, one edit at a time, for your yes.
 
+## 1.0.1 (2026-11-03)
+
+Two precautions for Codex's settings.
+
+- **Setup edits only the project's Codex file:** it merges the guard into the project's own `.codex/config.toml`, and never edits Codex's settings in your home folder, which Codex manages itself.
+- **One copy of Codex at a time:** when the guard is switched on from Codex's terminal version (`node .agents/scripts/codex-guard.mjs`), the steps now start with quitting the Codex app, so only one copy of Codex changes its settings at a time.
+
+### For your documents
+
+- Nothing to change.
+
 ## 1.0.0 (2026-10-22)
 
 The first numbered version. Projects set up before it have no version yet, and get everything below.
