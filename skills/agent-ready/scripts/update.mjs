@@ -13,17 +13,22 @@
 //   node .agents/scripts/update.mjs --yes         update
 //   node .agents/scripts/update.mjs --from <dir>  use a copy you downloaded: the repo folder, or its skills/agent-ready
 //   node .agents/scripts/update.mjs --record      record what is installed now (the setup runs this)
+//   node <skill>/scripts/update.mjs --gitattributes   add or refresh agent-ready's block in .gitattributes (the setup runs this)
 
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const SOURCE = "https://github.com/Bbhuva/agent-ready";
 export const RECORD = ".agents/agent-ready.json";
+export const ATTRIBUTES = ".gitattributes";
 const SKILL_COPY = ".agents/skills/agent-ready";
+const ATTRIBUTES_TEMPLATE = "templates/gitattributes.txt";
+const BLOCK_START = "# agent-ready start";
+const BLOCK_END = "# agent-ready end";
 
 const read = (file) => {
   try {
@@ -73,6 +78,88 @@ export function ownedFiles(skillDir) {
   ].filter((file) => existsSync(path.join(skillDir, file.from)));
 }
 
+// agent-ready's block in .gitattributes keeps its files in LF line endings, so
+// Git on Windows (core.autocrlf=true) doesn't print a warning for each one.
+// Lines for agent-ready's own tool files are always in the block. Every other
+// line names a document the setup writes, and is left out when something was
+// already there, so the person's own files keep working as before. Lines
+// outside the block are never changed, and a pattern they already set is not
+// repeated in it.
+const ownsPattern = (pattern) => /^\.(agents|githooks)\//.test(pattern) || /(^|\/)(ar-|agent-ready)[^/]*$/.test(pattern);
+const patternOf = (line) => line.trim().split(/\s+/)[0];
+const isRule = (line) => line.trim() !== "" && !line.trim().startsWith("#");
+
+// Whether a file or folder matching a pattern is in the project. A wildcard
+// this can't check counts as there, so its line is left out.
+export const existsIn = (root) => (pattern) => {
+  const plain = pattern.replace(/\/\*\*$/, "");
+  return plain.includes("*") || existsSync(path.join(root, plain));
+};
+
+// The new text of .gitattributes, and whether that adds the block, replaces it
+// or leaves it the same. `exists(pattern)` says what is already in the project.
+export function mergeAttributes(current, template, exists) {
+  const wanted = normalise(template).split("\n");
+  const from = wanted.indexOf(BLOCK_START);
+  const to = wanted.indexOf(BLOCK_END, from + 1);
+  if (from === -1 || to === -1) return { error: `${ATTRIBUTES_TEMPLATE} has no "${BLOCK_START}" and "${BLOCK_END}" lines.` };
+
+  const text = current ?? "";
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text.split(/(?<=\n)/); // each line keeps its own ending
+  const start = lines.findIndex((line) => line.trim() === BLOCK_START);
+  const end = start === -1 ? -1 : lines.findIndex((line, i) => i > start && line.trim() === BLOCK_END);
+  if (start !== -1 && end === -1) return { error: `${ATTRIBUTES} has a "${BLOCK_START}" line but no "${BLOCK_END}" line, so agent-ready can't tell its block from your lines. Add "${BLOCK_END}" after agent-ready's lines, then run this again.` };
+
+  const before = start === -1 ? lines : lines.slice(0, start);
+  const after = start === -1 ? [] : lines.slice(end + 1);
+  const inBlock = new Set(start === -1 ? [] : lines.slice(start + 1, end).filter(isRule).map(patternOf));
+  const yours = new Set([...before, ...after].filter(isRule).map(patternOf));
+  const leftOut = [];
+  const block = wanted.slice(from, to + 1).filter((line) => {
+    if (!isRule(line)) return true;
+    const pattern = patternOf(line);
+    if (yours.has(pattern)) return false;
+    if (ownsPattern(pattern) || inBlock.has(pattern) || !exists(pattern)) return true;
+    leftOut.push(pattern);
+    return false;
+  });
+  const blockText = block.join(eol) + eol;
+
+  if (start === -1) {
+    const gap = text === "" || /(\r?\n){2}$/.test(text) ? "" : /\n$/.test(text) ? eol : eol + eol;
+    return { action: "add", text: text + gap + blockText, leftOut };
+  }
+  const merged = before.join("") + blockText + after.join("");
+  return { action: merged === text ? "same" : "replace", text: merged, leftOut };
+}
+
+// Add agent-ready's block to the project's .gitattributes, or refresh it.
+// The setup runs this from the skill's own folder before it writes any file.
+function writeAttributes(root, print) {
+  const own = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const skillDir = existsSync(path.join(own, "SKILL.md")) ? own : path.join(root, SKILL_COPY);
+  const template = read(path.join(skillDir, ATTRIBUTES_TEMPLATE));
+  if (template === null) {
+    print(`Can't find ${ATTRIBUTES_TEMPLATE} in ${skillDir}, so ${ATTRIBUTES} was not changed.`);
+    return 1;
+  }
+  const merged = mergeAttributes(read(path.join(root, ATTRIBUTES)), template, existsIn(root));
+  if (merged.error) {
+    print(merged.error);
+    return 1;
+  }
+  const file = path.join(root, ATTRIBUTES);
+  if (merged.action !== "same") writeFileSync(file, merged.text);
+  const said = {
+    add: `Added agent-ready's block to ${file}: its files keep LF line endings, so Git on Windows doesn't warn about each one. Your own lines are untouched.`,
+    replace: `Refreshed agent-ready's block in ${file}. Your own lines are untouched.`,
+    same: `${file} already has agent-ready's block. Nothing to change.`,
+  }[merged.action];
+  print(merged.leftOut.length ? `${said}\nLeft out, because they are already here: ${merged.leftOut.map((pattern) => pattern.replace(/\*\*$/, "")).join(", ")}.` : said);
+  return 0;
+}
+
 export function readRecord(root) {
   try {
     return JSON.parse(readFileSync(path.join(root, RECORD), "utf8"));
@@ -116,13 +203,20 @@ export function planUpdate(root, skillDir) {
     const local = shippedNow.has(to) ? null : read(path.join(root, to));
     if (local !== null) steps.push({ action: fingerprint(local) === hash ? "remove" : "keep-retired", to });
   }
+  const template = read(path.join(skillDir, ATTRIBUTES_TEMPLATE));
+  if (template !== null) {
+    const merged = mergeAttributes(read(path.join(root, ATTRIBUTES)), template, existsIn(root));
+    steps.push(merged.error ? { action: "keep", to: ATTRIBUTES, problem: merged.error } : { action: merged.action, to: ATTRIBUTES, text: merged.text });
+  }
   return { record, steps };
 }
 
 function applyUpdate(root, skillDir, steps) {
   for (const step of steps) {
     const target = path.join(root, step.to);
-    if (step.action === "add" || step.action === "replace") {
+    if (step.to === ATTRIBUTES) {
+      if (step.action === "add" || step.action === "replace") writeFileSync(target, step.text); // only agent-ready's block changes
+    } else if (step.action === "add" || step.action === "replace") {
       mkdirSync(path.dirname(target), { recursive: true });
       const text = readFileSync(path.join(skillDir, step.from), "utf8");
       writeFileSync(target, step.to.startsWith(".githooks/") ? normalise(text) : text); // git hooks need Unix line endings
@@ -199,6 +293,7 @@ export function findRoot(start = process.cwd()) {
 const LABEL = { add: "add    ", replace: "replace", remove: "remove ", keep: "keep   ", "keep-retired": "keep   " };
 
 function describe(step) {
+  if (step.to === ATTRIBUTES) return step.problem ? `${ATTRIBUTES}: ${step.problem}` : `${ATTRIBUTES} (only agent-ready's block; your own lines stay as they are)`;
   if (step.action === "keep") return `${step.to}: you changed it, so it stays as it is. The new version will be in ${SKILL_COPY}/${step.from}, to compare.`;
   if (step.action === "keep-retired") return `${step.to}: no longer part of agent-ready, but you changed it, so it stays.`;
   if (step.action === "remove") return `${step.to} (no longer part of agent-ready)`;
@@ -208,6 +303,8 @@ function describe(step) {
 export function main(argv, { print = console.log, cwd = process.cwd() } = {}) {
   const args = argv.slice(2);
   const valueOf = (flag) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
+  // The setup runs --gitattributes before the folder is set up, so it never looks for a set-up folder further up.
+  if (args.includes("--gitattributes")) return writeAttributes(path.resolve(cwd, valueOf("--root") ?? "."), print);
   const root = valueOf("--root") ? path.resolve(cwd, valueOf("--root")) : findRoot(cwd);
   if (!isProject(root)) {
     print("This folder is not set up with agent-ready yet, so there is nothing to update. Set it up first with the paste-in prompt, or /ar-setup.");

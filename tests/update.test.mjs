@@ -20,6 +20,8 @@ function installed() {
   const agents = path.join(root, ".agents");
   mkdirSync(path.join(agents, "hooks"), { recursive: true });
   mkdirSync(path.join(agents, "scripts"), { recursive: true });
+  const attributes = node(root, path.join(SKILL, "scripts", "update.mjs"), "--gitattributes"); // first, as the setup does
+  assert.equal(attributes.code, 0, attributes.out);
   for (const name of ["guard.mjs", "precommit-guard.mjs"]) cpSync(path.join(SKILL, "guards", name), path.join(agents, "hooks", name));
   for (const name of readdirSync(path.join(SKILL, "scripts"))) cpSync(path.join(SKILL, "scripts", name), path.join(agents, "scripts", name));
   cpSync(path.join(SKILL, "commands"), path.join(agents, "commands"), { recursive: true });

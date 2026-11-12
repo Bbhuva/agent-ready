@@ -27,7 +27,7 @@ Anything the person tells you, in their first message or in any answer, beats a 
 
 - **Never open, print or copy a real `.env` file or any other secret file**, not even to check it. You may list file names to see whether they exist.
 - **Never overwrite a file that exists.** Merge into it and show the person what you added. Never drop their existing rules.
-- **Do not commit or push during setup.** Leave everything in the working tree. At the end, offer to make the setup the first save point (one local commit), and do it only on a yes.
+- **Do not commit or push during setup.** Leave everything in the working tree. At the end, offer to make the setup the first save point (one local commit), and do it only on a yes. On Windows, say first: *"Git may print a few warnings that LF will be replaced by CRLF. They are harmless: the files are saved with LF."*
 - **Do not install packages.** Everything here is plain files plus eight Node.js scripts with no dependencies.
 - **Where the files are:** next to this file. `templates/`, `guards/`, `scripts/`, `commands/` and `tool-configs/` hold files for the project. `reference/` holds guides for you; never copy them into the project. If you were started from the paste-in prompt, this whole skill is in `.agent-ready-download/skills/agent-ready/`.
 
@@ -69,7 +69,7 @@ End the message with one line: *"Anything you want done differently from the usu
 
 In one message:
 
-- Every file and folder you will create or change, grouped (the map, the rules, the plans, the operator's folder, the agent tools, the tool settings), one line each, marked **new** or **merge**.
+- Every file and folder you will create or change, grouped (the map, the rules, the plans, the operator's folder, the agent tools, the tool settings), one line each, marked **new** or **merge**. Include `.gitattributes`: "agent-ready's files keep LF line endings, in a block marked as agent-ready's; your own files work as before."
 - The recommended stack, if you are choosing one (the short section described in `reference/stack-guide.md`).
 - The person's instructions you will record as overrides, and what each one changes in the setup.
 - **One permission request for the whole setup:** to create and edit those files, to merge the guard into the tool settings listed, and to run the setup commands (copying files, `git config`, the self-tests). Say how to grant it in this tool so it does not stop at every file:
@@ -82,7 +82,9 @@ Wait for a clear yes before writing anything. Then create everything in one go, 
 
 ## Step 4. Write the map, the rules and the working documents
 
-Copy each template, replace every `{{...}}` with real content, and **delete any part that does not apply** rather than leaving a placeholder behind.
+**First, before you write any file**, run `node <this skill's folder>/scripts/update.mjs --gitattributes` in the project folder (from the paste-in prompt: `node .agent-ready-download/skills/agent-ready/scripts/update.mjs --gitattributes`). It appends `templates/gitattributes.txt` to `.gitattributes`, between `# agent-ready start` and `# agent-ready end`, so Git on Windows doesn't print a line-ending warning for each file the setup writes. It lists agent-ready's own files, plus the documents the setup is about to write, leaving out any that are already here, so the person's own files work as before. Their lines are never changed, and running it again adds nothing twice.
+
+Then copy each template, replace every `{{...}}` with real content, and **delete any part that does not apply** rather than leaving a placeholder behind.
 
 | Create | From | What it is for |
 | --- | --- | --- |
@@ -111,6 +113,7 @@ Copy each template, replace every `{{...}}` with real content, and **delete any 
 | `docs/security.md` | `templates/docs/security.md` | Security rules and this app's go-live checklist |
 | `.env.example` | `templates/env.example` | Variable names only. If one exists, keep it and add the header |
 | `.gitignore` | `templates/gitignore.txt` | Append only the lines that are missing |
+| `.gitattributes` | `templates/gitattributes.txt` | Written by the command above, never by hand |
 
 **Keep `AGENTS.md` short:** under 100 lines once filled in. It is loaded into every session of every tool, and a long rulebook makes agents worse. Anything not needed in every session goes into the right file in `docs/rules/`, with a row in the "Load only when you need it" table if it is a new file.
 
@@ -174,7 +177,7 @@ The commands are plain `node ...` lines that work in PowerShell, cmd, Git Bash, 
 
 - **husky:** add `node .agents/hooks/precommit-guard.mjs` to `.husky/pre-commit`.
 - **lefthook or the pre-commit framework:** add a local hook that runs the same command.
-- **No hooks yet:** copy `guards/git-pre-commit` to `.githooks/pre-commit`, add the line `.githooks/* text eol=lf` to `.gitattributes` (Windows line endings stop the hook from running), then run `git config core.hooksPath .githooks`. On macOS or Linux also run `chmod +x .githooks/pre-commit` and `git update-index --chmod=+x .githooks/pre-commit`. In a Node project, add `"prepare": "git config core.hooksPath .githooks"` to `package.json` scripts so fresh clones get the hook too. If `core.hooksPath` is already set to something else, ask first.
+- **No hooks yet:** copy `guards/git-pre-commit` to `.githooks/pre-commit` (agent-ready's block in `.gitattributes` keeps it in LF line endings: Windows ones stop the hook from running), then run `git config core.hooksPath .githooks`. On macOS or Linux also run `chmod +x .githooks/pre-commit` and `git update-index --chmod=+x .githooks/pre-commit`. In a Node project, add `"prepare": "git config core.hooksPath .githooks"` to `package.json` scripts so fresh clones get the hook too. If `core.hooksPath` is already set to something else, ask first.
 
 ## Step 6. Prove the guards work
 
@@ -241,6 +244,6 @@ Keep it short and plain:
 
 **Already set up, and this is a newer agent-ready?** Update instead of setting up again. Run `node .agents/scripts/update.mjs` in the project, or, from a fresh download, `node .agent-ready-download/skills/agent-ready/scripts/update.mjs --from .agent-ready-download`, and follow the steps in `commands/ar-update.md`. It replaces only agent-ready's own files, keeps any changed here, and never replaces a document: an agent offers the document changes one at a time. Delete `.agent-ready-download` afterwards.
 
-If the project is already set up, run `node .agents/scripts/health.mjs` first: it shows what is missing or broken. Then compare with these templates and add only what is missing. Never reset or shorten existing documents, and never remove rules or overrides the person added.
+If the project is already set up, run `node .agents/scripts/health.mjs` first: it shows what is missing or broken. Then compare with these templates and add only what is missing. Never reset or shorten existing documents, and never remove rules or overrides the person added. For `.gitattributes`, run `node .agents/scripts/update.mjs --gitattributes`: it refreshes only agent-ready's block.
 
 **Set up by an older version of agent-ready?** Signs: a long `AGENTS.md` with numbered sections 1 to 12, task files like `docs/build/phase-1.md`, `docs/build/handoff-template.md`, or `MTEST.md` in the project root. Offer to move it to this layout. Keep every rule, item, check and ID: move detailed sections out of `AGENTS.md` into `docs/rules/`, task files into `docs/build/phases/<phase>/plan.md`, templates into `docs/build/templates/`, `MTEST.md` to `docs/operator/mtest.md`, and "Operator tasks" sections into `docs/operator/todo.md` as `op-` items. Then add the board and run `board.mjs check`. Show the person every move and wait for a yes.

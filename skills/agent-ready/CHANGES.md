@@ -2,6 +2,17 @@
 
 Newest first. `/ar-update` shows the entries between your version and the new one. Its tool files (the guards, the scripts and the commands) are updated for you. Your documents never are: each "For your documents" list below is what an agent offers to change in them, one edit at a time, for your yes.
 
+## 1.0.2 (2026-11-13)
+
+A quieter first save point on Windows.
+
+- **No wall of line-ending warnings:** Git on Windows used to print an "LF will be replaced by CRLF" warning for every file the setup wrote, about 170 of them. Setup now adds a block marked as agent-ready's to `.gitattributes`, which keeps agent-ready's files in LF line endings, so only a few warnings are left. Your own files aren't listed and work as before, your own lines in `.gitattributes` are never changed, and `/ar-update` refreshes only agent-ready's block.
+- **A heads-up before the first save point:** on Windows, the setup says first that any line-ending warnings left are harmless.
+
+### For your documents
+
+- `.gitattributes`: offer to add agent-ready's block by running `node .agents/scripts/update.mjs --gitattributes`. It lists only agent-ready's own files, and leaves your lines as they are.
+
 ## 1.0.1 (2026-11-03)
 
 Two precautions for Codex's settings.

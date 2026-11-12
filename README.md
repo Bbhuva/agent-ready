@@ -205,7 +205,7 @@ Open questions:
 - **About 1,500 tokens loaded per session.** `AGENTS.md` is an 80-line map, kept under 100 lines by rule and at most 80 by this repo's tests. The other rules (about 11,700 tokens in seven files) load only when a task needs them. (Token counts are estimated at four characters per token.)
 - **One skill, one entry** in your agent's skill list (about 240 tokens), however much it sets up.
 - **Enforced by code, not by asking nicely:** reading secrets, destructive commands, committing keys and two agents claiming the same files are all refused by scripts. Writes into another agent's claimed files are refused for structured edits and for shell commands that name the file; scripts and build tools are not covered, and separate worktrees do the real isolating.
-- **161 automated tests** cover the guards, the commit check, the board, parallel merges and their recovery in real git worktrees, the key helper, the health check and run card, the updater, the Codex helper, the commands in every tool format, and the paste-in prompt.
+- **169 automated tests** cover the guards, the commit check, the board, parallel merges and their recovery in real git worktrees, the key helper, the health check and run card, the updater, the line-ending block in `.gitattributes`, the Codex helper, the commands in every tool format, and the paste-in prompt.
 
 Not measured yet: total tokens per task compared with no setup, and live runs in Cursor, OpenCode, Gemini CLI and Antigravity. Their hooks are tested against each tool's documented input format.
 

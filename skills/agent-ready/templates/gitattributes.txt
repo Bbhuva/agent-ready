@@ -1,0 +1,34 @@
+# agent-ready start
+# Keeps agent-ready's files in Unix (LF) line endings on every computer, so Git
+# on Windows doesn't print a warning for each one. Your own files are not listed
+# here and work as before. /ar-update refreshes only the lines between start and
+# end, so put any lines of your own outside them.
+.githooks/* text eol=lf
+.agents/hooks/** text=auto eol=lf
+.agents/scripts/** text=auto eol=lf
+.agents/commands/** text=auto eol=lf
+.agents/skills/agent-ready/** text=auto eol=lf
+.agents/board.json text=auto eol=lf
+.agents/agent-ready.json text=auto eol=lf
+.claude/commands/ar-*.md text=auto eol=lf
+.cursor/commands/ar-*.md text=auto eol=lf
+.gemini/commands/ar-*.toml text=auto eol=lf
+.opencode/commands/ar-*.md text=auto eol=lf
+.opencode/plugins/agent-ready-guard.js text=auto eol=lf
+# The documents the setup wrote. One that was here before the setup is left out.
+AGENTS.md text=auto eol=lf
+CLAUDE.md text=auto eol=lf
+GEMINI.md text=auto eol=lf
+docs/rules/** text=auto eol=lf
+docs/build/** text=auto eol=lf
+docs/operator/** text=auto eol=lf
+docs/architecture.md text=auto eol=lf
+docs/changelog.md text=auto eol=lf
+docs/learning.md text=auto eol=lf
+docs/product.md text=auto eol=lf
+docs/security.md text=auto eol=lf
+docs/stack.md text=auto eol=lf
+docs/words.md text=auto eol=lf
+.env.example text=auto eol=lf
+.gitignore text=auto eol=lf
+# agent-ready end
