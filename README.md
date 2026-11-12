@@ -1,5 +1,9 @@
 # agent-ready
 
+<p align="center">
+  <img src="media/agent-ready.gif" alt="agent-ready: the guard blocks an agent from running cat .env and git reset --hard, then /ar-undo shows that nothing is deleted.">
+</p>
+
 Set up any project for AI coding agents in one go: a short map every tool follows, detailed rules loaded only when needed, agile phase plans that survive between sessions, and guards that keep agents away from your secrets.
 
 Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI or Antigravity, and any tool that reads `AGENTS.md`. Made for people who build with agents every day, including people who would not call themselves developers.
@@ -15,7 +19,7 @@ AI agents are fast, but out of the box they:
 - start from zero every time, because nothing was written down;
 - pile up dead code and half-used files, because nobody stops to review and clean up.
 
-agent-ready fixes this with plain files and six small scripts. No service, no account, no dependencies.
+agent-ready fixes this with plain files and eight small scripts. No service, no account, no dependencies.
 
 ## What you get
 
@@ -162,14 +166,14 @@ When the guard blocks something, the agent is told not to look for another way a
 
 | Tool | Reads the rulebook | Guard | How it was checked |
 | --- | --- | --- | --- |
-| Claude Code | Through `CLAUDE.md` (`@AGENTS.md`) | `PreToolUse` hook plus deny rules in `.claude/settings.json` | Exact hook command run through bash, cmd and PowerShell with Claude Code's documented input |
-| Codex | Yes | `PreToolUse` hook in `.codex/config.toml`. Approve it once from the hook-approval icon in the Codex app's bar. No icon? `node .agents/scripts/codex-guard.mjs` opens Codex's terminal version for you and says what to press | Same |
+| Claude Code | Through `CLAUDE.md` (`@AGENTS.md`) | `PreToolUse` hook plus deny rules in `.claude/settings.json` | Exact hook command run through bash, cmd and PowerShell with Claude Code's documented input, then blocked the decoy in a live session |
+| Codex | Yes | `PreToolUse` hook in `.codex/config.toml`. Approve it once from the hook-approval icon in the Codex app's bar. No icon? `node .agents/scripts/codex-guard.mjs` opens Codex's terminal version for you and says what to press | Same, then blocked the decoy in a live session |
 | Cursor | Yes | `beforeReadFile` and `beforeShellExecution` in `.cursor/hooks.json` | Same |
 | OpenCode | Yes | Plugin in `.opencode/plugins/` | Plugin loaded and called in the test suite |
 | Gemini CLI, Antigravity | Yes | `BeforeTool` hook in `.gemini/settings.json` | Documented input format only |
 | Copilot, Windsurf, others | Yes | No hook support known. The git check still applies | |
 
-**Not yet confirmed inside a live session of each tool.** Every claim above is tested against each tool's documented hook format, but a live run in each tool is still to do. After setup, the skill has every tool prove it with a harmless decoy file (`.env.agent-ready-check`): the agent tries to read it and must be blocked.
+**Confirmed live in Claude Code and Codex:** in both, the guard blocked a real agent session from reading the decoy file. The other tools are tested against their documented hook format, and a live run in each is still to do. After setup, the skill has every tool prove it with a harmless decoy file (`.env.agent-ready-check`): the agent tries to read it and must be blocked.
 
 Open questions:
 
@@ -198,12 +202,12 @@ Open questions:
 
 ## By the numbers
 
-- **About 1,400 tokens loaded per session.** `AGENTS.md` is an 80-line map, kept under 100 lines by rule and under 80 by this repo's tests. The other rules (about 9,500 tokens in seven files) load only when a task needs them.
+- **About 1,500 tokens loaded per session.** `AGENTS.md` is an 80-line map, kept under 100 lines by rule and at most 80 by this repo's tests. The other rules (about 11,700 tokens in seven files) load only when a task needs them. (Token counts are estimated at four characters per token.)
 - **One skill, one entry** in your agent's skill list (about 240 tokens), however much it sets up.
 - **Enforced by code, not by asking nicely:** reading secrets, destructive commands, committing keys and two agents claiming the same files are all refused by scripts. Writes into another agent's claimed files are refused for structured edits and for shell commands that name the file; scripts and build tools are not covered, and separate worktrees do the real isolating.
-- **125 automated tests** cover the guards, the commit check, the board, parallel merges in real git worktrees, the key helper, the health check, the commands in every tool format, and the paste-in prompt.
+- **161 automated tests** cover the guards, the commit check, the board, parallel merges and their recovery in real git worktrees, the key helper, the health check and run card, the updater, the Codex helper, the commands in every tool format, and the paste-in prompt.
 
-Not measured yet: total tokens per task compared with no setup, and live runs inside every tool. The hooks are tested against each tool's documented input format.
+Not measured yet: total tokens per task compared with no setup, and live runs in Cursor, OpenCode, Gemini CLI and Antigravity. Their hooks are tested against each tool's documented input format.
 
 ## Why it is built this way
 

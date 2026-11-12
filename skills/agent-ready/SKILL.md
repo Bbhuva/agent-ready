@@ -28,7 +28,7 @@ Anything the person tells you, in their first message or in any answer, beats a 
 - **Never open, print or copy a real `.env` file or any other secret file**, not even to check it. You may list file names to see whether they exist.
 - **Never overwrite a file that exists.** Merge into it and show the person what you added. Never drop their existing rules.
 - **Do not commit or push during setup.** Leave everything in the working tree. At the end, offer to make the setup the first save point (one local commit), and do it only on a yes.
-- **Do not install packages.** Everything here is plain files plus six Node.js scripts with no dependencies.
+- **Do not install packages.** Everything here is plain files plus eight Node.js scripts with no dependencies.
 - **Where the files are:** next to this file. `templates/`, `guards/`, `scripts/`, `commands/` and `tool-configs/` hold files for the project. `reference/` holds guides for you; never copy them into the project. If you were started from the paste-in prompt, this whole skill is in `.agent-ready-download/skills/agent-ready/`.
 
 ## Step 1. Look around before asking anything
