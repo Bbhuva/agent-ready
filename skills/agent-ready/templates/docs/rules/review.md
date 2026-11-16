@@ -12,6 +12,7 @@ Before you tick an item, read your own change as if someone else wrote it. Look 
 4. **Do the tests mean something?** Would they fail if the feature broke? A test that only checks a function ran does not count.
 5. **Is anything left behind?** Debug output, commented-out code, unused imports, stray files, a TODO without an item ID, files outside `Touches`.
 6. **Are the docs current?** As `docs/rules/docs.md` says.
+7. **Can a visiting agent use it?** Only for an item that adds or changes a page, a form or an API route. Start the app and run `node .agents/scripts/webcheck.mjs <address>`, with `--page` or `--api` for what you changed, as "How to check" in `docs/rules/web.md` says. No FIX line may be left. The script cannot sign in: for a screen behind sign-in, check in a browser that every control has a name.
 
 Fix what you find, then run the checks again. For items that touch sign-in, payments or user data, or when the operator asks, have the review done by a fresh session or a different tool than the one that built it.
 
@@ -40,6 +41,7 @@ Look for:
 - **Tests:** acceptance checks with no real test, tests that assert nothing, coverage under the floor, critical code with no "not allowed" tests.
 - **Performance:** queries inside loops, lists with no limit, oversized bundles.
 - **Works for everyone:** every page on a phone-sized screen, by keyboard alone, with readable contrast, and images with alt text. Add what needs a real device to `docs/operator/mtest.md`.
+- **Visiting agents** (a project with web pages or an API): run `node .agents/scripts/webcheck.mjs` against the running app, as "How to check" in `docs/rules/web.md` says. Pages whose text arrives only after JavaScript runs, controls without a name, root files that list pages which are gone or private, an API route that answers with a sign-in page instead of a 401.
 - **Drift:** docs that no longer match the code: `AGENTS.md` (commands, map), `docs/stack.md`, `docs/architecture.md`, `docs/operator/guide.md` (try its steps), `.env.example`, decisions. Code or build output that ended up in `docs/`.
 
 **Prove every finding.** Show the input or the steps that make it fail, or say why you could not. Drop anything you cannot back up. A short list of real problems beats a long list of guesses.

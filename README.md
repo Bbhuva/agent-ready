@@ -19,7 +19,7 @@ AI agents are fast, but out of the box they:
 - start from zero every time, because nothing was written down;
 - pile up dead code and half-used files, because nobody stops to review and clean up.
 
-agent-ready fixes this with plain files and eight small scripts. No service, no account, no dependencies.
+agent-ready fixes this with plain files and nine small scripts. No service, no account, no dependencies.
 
 ## What you get
 
@@ -34,6 +34,7 @@ agent-ready fixes this with plain files and eight small scripts. No service, no 
 | `docs/rules/git.md` | Save points after every finished item, going back with `git revert`, merges and deploys, which you control. |
 | `docs/rules/review.md` | A fresh-eyes review of every item before it is saved, and the phase-end adversarial review of the whole codebase, cleanup and a short retro. |
 | `docs/rules/bugs.md` | Fixing problems: a clear report, a failing test first, the cause named before anything changes, then the fix. |
+| `docs/rules/web.md` | For projects with web pages or an API: what makes the finished product readable and usable by visiting AI agents. Text in the first HTML response, named controls, `robots.txt`, a sitemap, `llms.txt`, a Markdown version of pages, and how AI tools sign in with a permission of their own. Left out of projects with nothing on the web. |
 | `docs/build/README.md` | The roadmap: every phase, its goal and status, and what is waiting on you. |
 | `docs/build/phases/` | One folder per phase: `brief.md` (what you asked for, in your words, agreed before planning), `plan.md` (goal, exit criteria, iterations of items with IDs, stories, dependencies, the files each one touches, acceptance checks and tests) and `review.md`. |
 | `docs/build/backlog.md` | Everything wanted but not yet planned into a phase, most important first. |
@@ -43,7 +44,7 @@ agent-ready fixes this with plain files and eight small scripts. No service, no 
 | `docs/operator/todo.md` | **Your to-do list:** everything an agent can't do for you, such as installing software, signing up, adding an API key or paying, with exact steps in plain words. |
 | `docs/operator/mtest.md` | Checks only you can do (a real phone, a dashboard, a payment), with IDs, so you report "MTEST-AUTH-001 passed" and the agent knows what that means. |
 | `docs/operator/guide.md` | How to run your project in plain words: start it, see it live, add a key, go back to a save point, try a change before it goes live, ship, undo a bad deploy, report a problem, keep costs down. Agents keep it current. |
-| `docs/operator/launch.md` | Before you go live: spending limits, legal basics, domain and email, phones and accessibility, error alerts, backups. |
+| `docs/operator/launch.md` | Before you go live: spending limits, legal basics, domain and email, phones and accessibility, AI assistants, error alerts, backups. |
 | `docs/words.md` | One name for each thing in your project, used in chat, docs and code, plus plain meanings of the technical words agents use. |
 | `docs/stack.md` | The tech stack, why it was chosen, where the code lives, what it costs, and which accounts you need. |
 | `docs/architecture.md` | How the parts fit together, with a diagram. Updated whenever a part is added. |
@@ -57,6 +58,7 @@ agent-ready fixes this with plain files and eight small scripts. No service, no 
 | `.agents/skills/agent-ready/` | A copy of this skill, so `/ar-setup` can check the setup without downloading again. |
 | `.agents/scripts/update.mjs`, `.agents/agent-ready.json` | The updater, and its record of the installed version and of agent-ready's own files, so an update can tell them apart from your changes. |
 | `.agents/scripts/health.mjs` | Checks the whole setup in plain words: the map, the docs, whether each tool runs the guard, the secret check on commits, the plans, missing keys, leftover worktrees. |
+| `.agents/scripts/webcheck.mjs` | Reads your site the way a visiting AI agent does, on your computer or live, and says what it can and cannot use: text in the first HTML, names on buttons and fields, honest 404s, `robots.txt`, the sitemap, `llms.txt`, a Markdown version, and how API routes answer without sign-in. It only reads. |
 | `.agents/hooks/guard.mjs` | Blocks agents from reading secret files and running destructive commands. In parallel work it also blocks writes into files another agent has claimed: structured edits, and shell commands that name the file they write (it can't see what scripts or build tools write). |
 | `.agents/hooks/precommit-guard.mjs` | Refuses any commit that adds a secret file or a real-looking API key, whoever makes it. |
 
@@ -110,6 +112,7 @@ Type these in your agent's chat. Forgot one? `/ar-help` lists them all, and so d
 | `/ar-explain [what]` | Explains something in plain words |
 | `/ar-rule [instruction]` | Adds a standing instruction every agent follows from now on |
 | `/ar-health` | Checks the setup is still sound |
+| `/ar-web [address]` | Checks how your site or app looks to a visiting AI agent, and fixes what gets in its way |
 | `/ar-launch` | Goes through the before-you-go-live checklist |
 | `/ar-coordinate` | Runs several agents at once, and merges their work in order |
 | `/ar-setup` | Sets up the project, or checks the setup |
@@ -202,10 +205,10 @@ Open questions:
 
 ## By the numbers
 
-- **About 1,500 tokens loaded per session.** `AGENTS.md` is an 80-line map, kept under 100 lines by rule and at most 80 by this repo's tests. The other rules (about 11,700 tokens in seven files) load only when a task needs them. (Token counts are estimated at four characters per token.)
+- **About 1,500 tokens loaded per session.** `AGENTS.md` is an 80-line map, kept under 100 lines by rule and at most 80 by this repo's tests. The other rules (about 15,000 tokens in eight files, one of them only for web projects) load only when a task needs them. (Token counts are estimated at four characters per token.)
 - **One skill, one entry** in your agent's skill list (about 240 tokens), however much it sets up.
 - **Enforced by code, not by asking nicely:** reading secrets, destructive commands, committing keys and two agents claiming the same files are all refused by scripts. Writes into another agent's claimed files are refused for structured edits and for shell commands that name the file; scripts and build tools are not covered, and separate worktrees do the real isolating.
-- **169 automated tests** cover the guards, the commit check, the board, parallel merges and their recovery in real git worktrees, the key helper, the health check and run card, the updater, the line-ending block in `.gitattributes`, the Codex helper, the commands in every tool format, and the paste-in prompt.
+- **179 automated tests** cover the guards, the commit check, the board, parallel merges and their recovery in real git worktrees, the key helper, the health check and run card, the updater, the line-ending block in `.gitattributes`, the Codex helper, the commands in every tool format, the web check against a small test site, the templates, and the paste-in prompt.
 
 Not measured yet: total tokens per task compared with no setup, and live runs in Cursor, OpenCode, Gemini CLI and Antigravity. Their hooks are tested against each tool's documented input format.
 

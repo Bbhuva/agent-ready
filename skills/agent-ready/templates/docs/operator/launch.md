@@ -38,6 +38,18 @@ This is a reminder list, not legal advice. Check what applies where your users l
 - [ ] Pages load in a few seconds on a phone connection.
 - [ ] Error pages and empty states (no items yet, nothing found) say something helpful.
 
+## Ready for AI assistants
+
+People now ask AI assistants to find, read and use sites for them. The rules agents follow are in `docs/rules/web.md`.
+
+- [ ] Every public page shows its text without JavaScript, and every button and form field has a name a program can read.
+- [ ] The live site serves `robots.txt`, a sitemap and `llms.txt`, and they list only public pages.
+- [ ] You have decided whether AI search may quote your pages and whether AI companies may train on them, and `robots.txt` says so.
+- [ ] Everything private is behind sign-in, not only left out of `robots.txt`.
+- [ ] If other tools connect to it (an API, an MCP server), they sign in with a permission of their own that you can withdraw, never with someone's password.
+- [ ] `/ar-web` with the live address shows nothing to fix.
+- [ ] A scan of the live address (isitagentready.com, and "Agentic browsing" in PageSpeed Insights) shows nothing missing that `docs/rules/web.md` asks for.
+
 ## After launch
 
 - [ ] Errors in the live app reach you (an error-tracking service, or the host's alerts) by email.

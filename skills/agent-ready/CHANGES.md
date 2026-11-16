@@ -2,6 +2,29 @@
 
 Newest first. `/ar-update` shows the entries between your version and the new one. Its tool files (the guards, the scripts and the commands) are updated for you. Your documents never are: each "For your documents" list below is what an agent offers to change in them, one edit at a time, for your yes.
 
+## 1.1.0 (2026-11-16)
+
+Sites and apps that AI assistants can read and use.
+
+- **Rules for visiting agents:** a new rules file, `docs/rules/web.md`, for any project with web pages or an API. People now ask AI assistants to find, read and use sites for them, so agents build pages that send their text in the first HTML response, give every button and field a name a program can read, and serve `robots.txt`, a sitemap, `llms.txt` and a Markdown version of each content page. These are the things Cloudflare's isitagentready.com and the Agentic Browsing audits in PageSpeed Insights look for.
+- **`/ar-web` checks it for you:** a new script, `.agents/scripts/webcheck.mjs`, reads your site the way a visiting AI agent does, on your computer or live, and prints what to fix in plain words. It only reads the site, and it needs nothing installed.
+- **Behind sign-in too:** an AI tool acts for one person and never with more rights than that person. It uses the same screens in their browser, or signs in to the API or an MCP server with a permission of its own (OAuth) that the person can withdraw. Never with a password.
+- **Your call, written down:** whether AI search may quote your pages and whether AI companies may train on them is your decision. Agents ask once, log the answer, and write it into `robots.txt`.
+- **No chasing scores:** newer, draft standards (agent cards, skills indexes, agent payments) are listed as "not by default", so an agent adds one only when you want what it does.
+- **Checked on every item:** an item that adds or changes a page, a form or an API route is not done until the check shows nothing to fix. The phase-end review and the launch list check the whole site again.
+
+### For your documents
+
+Only if this project has web pages or an API. Otherwise there is nothing to change.
+
+- `docs/rules/web.md`: new. Create it from the template, keeping only the parts that fit this project.
+- `AGENTS.md`: add the row for `docs/rules/web.md` to the "Load only when you need it" table. If that takes the file over its line limit, join two short lines elsewhere.
+- `docs/operator/launch.md`: add the "Ready for AI assistants" section, before "After launch".
+- `docs/rules/workflow.md`: add the web check line to "Done: when an item can be ticked".
+- `docs/rules/review.md`: add question 7, "Can a visiting agent use it?", to the item review, and the "Visiting agents" bullet to the phase-end review's "Look for" list.
+- `docs/build/decisions.md`: ask who may crawl the site (AI search, fetchers a person triggers, training) and log the answer.
+- `docs/build/backlog.md`: run `/ar-web` and offer an item for each FIX line.
+
 ## 1.0.2 (2026-11-13)
 
 A quieter first save point on Windows.

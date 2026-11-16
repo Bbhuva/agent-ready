@@ -68,6 +68,29 @@ test("every doc in the rules table of AGENTS.md exists", () => {
   assert.deepEqual(refs.filter((ref) => !existsSync(path.join(templates, ref))), []);
 });
 
+test("the rules for visiting agents ship, are wired in, and stay optional", () => {
+  const web = read(path.join(templates, "docs", "rules", "web.md"));
+  for (const part of ["Every page", "Public pages", "An API", "Behind sign-in", "Not by default", "How to check"]) assert.match(web, new RegExp(`^## ${part}`, "m"), part);
+  for (const name of ["robots.txt", "sitemap.xml", "llms.txt", "text/markdown", "oauth-protected-resource", "WWW-Authenticate"]) assert.ok(web.includes(name), `web.md should cover ${name}`);
+  const agents = read(path.join(templates, "AGENTS.md"));
+  assert.ok(docRefs(agents.slice(agents.indexOf("## Load only when you need it"), agents.indexOf("## Commands"))).includes("docs/rules/web.md"), "the map points at it");
+  const launch = read(path.join(templates, "docs", "operator", "launch.md"));
+  assert.match(launch, /^## Ready for AI assistants$/m);
+  assert.ok(docRefs(launch).includes("docs/rules/web.md"));
+  const review = read(path.join(templates, "docs", "rules", "review.md"));
+  assert.match(review, /\*\*Visiting agents\*\*[^\n]*`docs\/rules\/web\.md`/);
+  // Every item that touches a page is checked, not only the phase end: in the item review and in the done list.
+  const itemReview = review.slice(review.indexOf("## Item review"), review.indexOf("## Phase-end review"));
+  assert.match(itemReview, /\*\*Can a visiting agent use it\?\*\*[^\n]*webcheck\.mjs[^\n]*`docs\/rules\/web\.md`/);
+  const workflow = read(path.join(templates, "docs", "rules", "workflow.md"));
+  const done = workflow.slice(workflow.indexOf("## Done: when an item can be ticked")).split(/\n## /)[0];
+  assert.match(done, /webcheck\.mjs[^\n]*`docs\/rules\/web\.md`/);
+  // A project with nothing on the web leaves the file out, so the health check must not demand it.
+  const required = read(path.join(skillDir, "scripts", "health.mjs")).match(/const RULES = \[([^\]]+)\]/)[1];
+  assert.doesNotMatch(required, /"web"/);
+  assert.match(read(path.join(skillDir, "SKILL.md")), /No pages and no API[^\n]*Leave the file out/);
+});
+
 test("the operator's files live in docs/operator, and nothing but documents ships in docs/", () => {
   assert.ok(!existsSync(path.join(templates, "MTEST.md")), "MTEST.md belongs in docs/operator/mtest.md");
   for (const name of ["todo.md", "mtest.md", "guide.md"]) assert.ok(existsSync(path.join(templates, "docs", "operator", name)), `docs/operator/${name} is missing`);

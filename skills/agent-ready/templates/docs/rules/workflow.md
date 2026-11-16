@@ -88,6 +88,7 @@ Skip shaping only for small fixes, or when the operator says to.
 - Every acceptance check passes, and you ran it yourself.
 - The tests `docs/rules/testing.md` asks for are written and pass. Lint and type checks are clean, with no new warnings.
 - The item review in `docs/rules/review.md` found nothing left to fix.
+- If it adds or changes a page, a form or an API route: `node .agents/scripts/webcheck.mjs`, run against the running app, shows nothing to fix, as "How to check" in `docs/rules/web.md` says.
 - No debug output, commented-out code, or TODO without an item ID is left behind.
 - The docs it affects are updated, as `docs/rules/docs.md` says. If it adds or changes a command the operator uses (start, test, build, install), the run card `docs/operator/run.md` says so, and a row waiting on this item (`Not ready yet (<id> sets it up)`) is filled in.
 - Checks only a human can do are in `docs/operator/mtest.md`, linked to the item ID.

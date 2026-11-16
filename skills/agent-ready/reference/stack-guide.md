@@ -30,7 +30,8 @@ Weigh these in order:
 3. **Fit beats habit.** Don't suggest a language or tool they know when it would become a bottleneck: it can't do a core need well (an app-store phone app, a desktop app, heavy live updates), it would force a second language anyway, hosting for it is hard or costly on their budget, or it is so rarely used that agents write weak code for it. Say so in one sentence, name what you suggest instead and why, and let them decide.
 4. **Popular and well documented.** Agents write better code for tools with lots of public examples, and the operator can find help.
 5. **Few moving parts.** One language end to end where possible. Managed services with free tiers rather than servers to look after. For an online web app, one host, ideally one that makes a preview link for every branch.
-6. **Sensitive data or a large audience** points towards established providers with clear security pages and backups. Say what the operator must check, such as the data region.
+6. **AI assistants will visit it.** People ask assistants to find, read and use sites for them, and most of those tools read the HTML without running JavaScript. For anything with public pages, choose a framework that sends finished HTML, rendered on the server or built ahead of time, as every web starting point below does. A page that is empty until JavaScript runs suits only screens behind sign-in. The rules go into the project as `docs/rules/web.md`.
+7. **Sensitive data or a large audience** points towards established providers with clear security pages and backups. Say what the operator must check, such as the data region.
 
 **Check before you recommend.** The tables are starting points, not a verdict. Look up current stable versions and pricing in the official docs if you can browse. Don't rely on memory, and say so if you could not check.
 
@@ -80,6 +81,7 @@ Sensitive data needs backups and a region the operator chooses: say so in the pl
 | End-to-end tests | Playwright (web), Maestro (mobile) |
 | CI | GitHub Actions running lint, type checks and tests on every push, when the code is on GitHub |
 | Error tracking in production | Sentry, or the host's own alerts |
+| Letting other tools sign in (an API or MCP server that AI assistants use for a person) | OAuth from the sign-in provider already chosen, never a shared password or a home-made token scheme. Check that the provider can act as an OAuth server before choosing it |
 
 ## Where the code goes
 

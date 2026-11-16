@@ -12,6 +12,8 @@ import { changesBetween, compareVersions, fingerprint, RECORD } from "../skills/
 
 const SKILL = fileURLToPath(new URL("../skills/agent-ready/", import.meta.url));
 const VERSION = readFileSync(path.join(SKILL, "VERSION"), "utf8").trim();
+// The pretend newer version in these tests: always one minor version ahead of the real one.
+const NEXT = VERSION.replace(/^(\d+)\.(\d+)\.\d+$/, (_, major, minor) => `${major}.${Number(minor) + 1}.0`);
 
 // A project installed the way the setup installs one, with its version recorded.
 function installed() {
@@ -40,7 +42,7 @@ function installed() {
 
 // A newer version of the skill: one script changed, one command added, one
 // retired, the git hook changed (with Windows line endings), and a What's new entry.
-function newerVersion(base, version = "1.1.0") {
+function newerVersion(base, version = NEXT) {
   const repo = path.join(base, `source-${version}`);
   const skill = path.join(repo, "skills", "agent-ready");
   cpSync(SKILL, skill, { recursive: true });
@@ -109,8 +111,9 @@ test("a dry run shows the versions, what's new and each file's fate, and changes
     const before = snapshot(p.root);
     const out = update(p.root, "--from", newerVersion(p.base));
     assert.equal(out.code, 0, out.out);
-    assert.match(out.out, new RegExp(`You have agent-ready ${VERSION.replace(/\./g, "\\.")}\\. The newest is 1\\.1\\.0`));
-    assert.match(out.out, /What's new:\n\n## 1\.1\.0[\s\S]*### For your documents/);
+    const next = NEXT.replace(/\./g, "\\.");
+    assert.match(out.out, new RegExp(`You have agent-ready ${VERSION.replace(/\./g, "\\.")}\\. The newest is ${next}`));
+    assert.match(out.out, new RegExp(`What's new:\\n\\n## ${next}[\\s\\S]*### For your documents`));
     assert.doesNotMatch(out.out, new RegExp(`## ${VERSION.replace(/\./g, "\\.")} `), "only what is newer than the installed version");
     assert.match(out.out, /replace {2}\.agents\/scripts\/keys\.mjs/);
     assert.match(out.out, /add {6}\.agents\/commands\/ar-new\.md/);
@@ -134,7 +137,7 @@ test("--yes updates agent-ready's files, keeps the ones changed here, and leaves
 
     const out = update(p.root, "--yes", "--from", source);
     assert.equal(out.code, 0, out.out);
-    assert.match(out.out, /Updated to agent-ready 1\.1\.0: 4 files changed/);
+    assert.match(out.out, new RegExp(`Updated to agent-ready ${NEXT.replace(/\./g, "\\.")}: 4 files changed`));
     assert.equal(read(p.root, ".agents/scripts/keys.mjs"), read(source, "skills/agent-ready/scripts/keys.mjs"), "an unchanged file gets the new version");
     assert.equal(read(p.root, ".agents/scripts/board.mjs"), edited, "a file changed here is kept");
     assert.match(out.out, /keep {5}\.agents\/scripts\/board\.mjs: you changed it/);
@@ -142,15 +145,15 @@ test("--yes updates agent-ready's files, keeps the ones changed here, and leaves
     assert.ok(!existsSync(path.join(p.root, ".agents", "commands", "ar-explain.md")) && !existsSync(path.join(p.root, ".claude", "commands", "ar-explain.md")), "retired commands go");
     assert.ok(existsSync(path.join(p.root, ".agents", "commands", "my-own.md")), "the operator's own command stays");
     assert.doesNotMatch(read(p.root, ".githooks/pre-commit"), /\r/, "the git hook keeps Unix line endings");
-    assert.equal(read(p.root, ".agents/skills/agent-ready/VERSION").trim(), "1.1.0", "the skill copy is the new version");
+    assert.equal(read(p.root, ".agents/skills/agent-ready/VERSION").trim(), NEXT, "the skill copy is the new version");
     for (const [file, text] of Object.entries(documents)) assert.equal(read(p.root, file), text, `${file} is untouched`);
     assert.match(out.out, /The guard passes its self-test\.\nThe commit check passes its self-test\./);
 
     const data = record(p.root);
-    assert.equal(data.version, "1.1.0");
+    assert.equal(data.version, NEXT);
     assert.notEqual(data.files[".agents/scripts/board.mjs"], fingerprint(edited), "the kept file is still known as changed here");
     const again = update(p.root, "--from", source);
-    assert.match(again.out, /You're up to date: agent-ready 1\.1\.0/);
+    assert.match(again.out, new RegExp(`You're up to date: agent-ready ${NEXT.replace(/\./g, "\\.")}`));
   } finally {
     p.done();
   }
@@ -168,13 +171,13 @@ test("a project set up before version numbers is told, then updated in full", ()
     assert.equal(dry.code, 0, dry.out);
     assert.match(dry.out, /You have agent-ready from before version numbers/);
     assert.match(dry.out, /no record of which version it has[\s\S]*If you changed one on purpose, say so/);
-    assert.match(dry.out, /## 1\.1\.0[\s\S]*## 1\.0\.0/, "every entry of What's new");
+    assert.match(dry.out, new RegExp(`## ${NEXT.replace(/\./g, "\\.")}[\\s\\S]*## 1\\.0\\.0`), "every entry of What's new");
     assert.match(dry.out, /replace {2}\.agents\/scripts\/board\.mjs/);
 
     const out = update(p.root, "--yes", "--from", source);
     assert.equal(out.code, 0, out.out);
     assert.equal(read(p.root, ".agents/scripts/board.mjs"), read(source, "skills/agent-ready/scripts/board.mjs"));
-    assert.equal(record(p.root).version, "1.1.0");
+    assert.equal(record(p.root).version, NEXT);
   } finally {
     p.done();
   }
@@ -213,7 +216,7 @@ test("a project set up before 1.0.0 can update by running the downloaded updater
     const out = node(p.root, downloaded, "--yes", "--from", source);
     assert.equal(out.code, 0, out.out);
     assert.ok(existsSync(path.join(p.root, ".agents", "scripts", "update.mjs")), "now it has the updater");
-    assert.equal(record(p.root).version, "1.1.0");
+    assert.equal(record(p.root).version, NEXT);
   } finally {
     p.done();
   }
