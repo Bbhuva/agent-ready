@@ -4,8 +4,9 @@
 // Looks at a site the way a visiting AI agent does, and says in plain words
 // what such an agent can and cannot use: the text in the first HTML response,
 // names on buttons, links and fields, honest status codes, robots.txt, the
-// sitemap, llms.txt, a Markdown version of the page, and how API routes answer
-// without sign-in. The rules it checks are in docs/rules/web.md.
+// sitemap, llms.txt and the links in it, a Markdown version of the page, and
+// how API routes answer without sign-in. The rules it checks are in
+// docs/rules/web.md.
 //
 // It only reads: every request is a GET, to the address you give it. It reads
 // the HTML as sent, so it cannot see what appears after JavaScript runs. A
@@ -29,6 +30,7 @@ import { pathToFileURL } from "node:url";
 const AGENT = "agent-ready-webcheck";
 const MAX_BODY = 2_000_000;
 const MIN_WORDS = 25;
+const MAX_LINKS = 10; // how many of the links in llms.txt are followed
 const AI_CRAWLERS = /user-agent\s*:\s*(OAI-SearchBot|Claude-SearchBot|PerplexityBot|ChatGPT-User|Claude-User|Perplexity-User|GPTBot|ClaudeBot|Google-Extended|Applebot-Extended|CCBot)/i;
 
 async function get(url, { accept = "text/html,*/*;q=0.8", redirect = "follow", timeout = 10000 } = {}) {
@@ -57,6 +59,14 @@ const textOf = (html) =>
     .replace(/\s+/g, " ")
     .trim();
 const opening = (html, name) => [...html.matchAll(new RegExp(`<${name}\\b([^>]*)>`, "gi"))].map((m) => ({ attrs: m[1], index: m.index }));
+const isJson = (text) => {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
 const paired = (html, name) => [...html.matchAll(new RegExp(`<${name}\\b([^>]*)>([\\s\\S]*?)<\\/${name}\\s*>`, "gi"))].map((m) => ({ attrs: m[1], inner: m[2], index: m.index, end: m.index + m[0].length }));
 
 // A name a program can read: its own label, its text, or the name of an image or icon inside it.
@@ -91,6 +101,7 @@ export function readPage(html) {
   }).length;
   const fakeButtons = [...opening(clean, "div"), ...opening(clean, "span")].filter((tag) => hasAttr(tag.attrs, "onclick") || /^(button|link)$/i.test(attr(tag.attrs, "role") ?? "")).length;
   const forms = opening(clean, "form");
+  const jsonLd = [...html.matchAll(/<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script\s*>/gi)].map((m) => m[1]);
 
   return {
     words,
@@ -98,10 +109,11 @@ export function readPage(html) {
     title: textOf(clean.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? ""),
     description: metas.some((meta) => /^description$/i.test(attr(meta.attrs, "name") ?? "") && (attr(meta.attrs, "content") ?? "").trim()),
     canonical: links.some((link) => /\bcanonical\b/i.test(attr(link.attrs, "rel") ?? "")),
-    markdownLink: links.some((link) => /\balternate\b/i.test(attr(link.attrs, "rel") ?? "") && /text\/markdown/i.test(attr(link.attrs, "type") ?? "")),
+    markdownLink: attr(links.find((link) => /\balternate\b/i.test(attr(link.attrs, "rel") ?? "") && /text\/markdown/i.test(attr(link.attrs, "type") ?? ""))?.attrs ?? "", "href"),
     h1: opening(clean, "h1").length,
     main: opening(clean, "main").length > 0 || /role\s*=\s*["']?main/i.test(clean),
-    jsonLd: /<script\b[^>]*type\s*=\s*["']?application\/ld\+json/i.test(html),
+    jsonLd: jsonLd.length > 0,
+    badJsonLd: jsonLd.filter((block) => !isJson(block)).length,
     unnamedButtons,
     unnamedLinks,
     deadLinks,
@@ -123,14 +135,16 @@ export function sitePath(value) {
   return rewritten ? `/${rewritten[1].replace(/\\/g, "/")}` : String(value);
 }
 
-function siteUrl(value, origin) {
+// An http(s) address, or null when the text is not one.
+function toUrl(value, base) {
   try {
-    const url = new URL(sitePath(value), origin);
+    const url = new URL(value, base);
     return /^https?:$/.test(url.protocol) ? url : null;
   } catch {
     return null;
   }
 }
+const siteUrl = (value, origin) => toUrl(sitePath(value), origin);
 
 const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 const looksLikePage = (response) => response.type.includes("html") || /^\s*<(!doctype|html)\b/i.test(response.body);
@@ -168,6 +182,7 @@ async function checkPage(add, url, { isPublic, timeout }) {
     const missing = [!page.description && "a meta description", !page.canonical && "a canonical link", !page.jsonLd && "JSON-LD for what the page is about"].filter(Boolean);
     if (missing.length) add("warn", "page-meta", `${where} is missing ${missing.join(", ")}`, "These tell an agent what the page is before it reads it.");
   }
+  if (page.badJsonLd) add("fail", "page-data", `${where} has JSON-LD that is not valid JSON`, "An agent that reads it gets nothing. Generate the block with JSON.stringify from the same data the page shows.");
   if (page.forms && page.toolForms === page.forms) add("ok", "page-forms", `${where}: ${plural(page.forms, "form")} described as a tool for browser agents`);
   else if (page.forms) add("warn", "page-forms", `${where}: ${page.forms - page.toolForms} of ${plural(page.forms, "form")} not described as a tool`, "Experimental, and only Chrome reads it so far: toolname and tooldescription on a <form> let a browser agent use it by name (WebMCP, docs/rules/web.md).");
   return { ...response, page };
@@ -181,7 +196,7 @@ async function checkNotFound(add, origin, timeout) {
   else add("warn", "not-found", `A page that does not exist answers ${response.status}`, "404 is what agents expect for a missing page.");
 }
 
-async function checkPublicFiles(add, origin, home, timeout) {
+async function checkPublicFiles(add, origin, home, markdownLink, timeout) {
   // robots.txt
   const robots = await get(new URL("/robots.txt", origin), { accept: "text/plain,*/*;q=0.5", timeout });
   let sitemapUrls = [];
@@ -222,18 +237,35 @@ async function checkPublicFiles(add, origin, home, timeout) {
   if (!llms.ok || llms.status !== 200) add("fail", "llms", "There is no /llms.txt", "Serve a short Markdown summary there: `# Name`, a one-line summary, then links to the pages that matter most.");
   else if (looksLikePage(llms)) add("fail", "llms", "/llms.txt answers with a web page", "The app sends a page for every address. Serve a real Markdown file there.");
   else {
-    const links = (llms.body.match(/\[[^\]]+\]\([^)\s]+\)/g) ?? []).length;
+    const hrefs = [...llms.body.matchAll(/\[[^\]]+\]\(([^)\s]+)\)/g)].map((m) => m[1]);
     const titled = /^\s*#\s+\S/.test(llms.body);
-    if (!titled || !links) add("fail", "llms", `/llms.txt is there but ${!titled ? "does not start with a `# Name` line" : "holds no links"}`, "It needs a title line and Markdown links to the main pages, each with a few words on what it holds.");
-    else add("ok", "llms", `/llms.txt has a title and ${plural(links, "link")}`);
+    if (!titled || !hrefs.length) add("fail", "llms", `/llms.txt is there but ${!titled ? "does not start with a `# Name` line" : "holds no links"}`, "It needs a title line and Markdown links to the main pages, each with a few words on what it holds.");
+    else {
+      // Follow the links on this site, a few of them: an agent that lands on a 404 has nowhere to go.
+      const own = [...new Set(hrefs.map((href) => toUrl(href, origin)).filter((url) => url?.origin === origin).map((url) => url.href))].slice(0, MAX_LINKS);
+      const answers = await Promise.all(own.map((url) => get(url, { accept: "text/markdown,text/html,*/*;q=0.5", timeout })));
+      const gone = answers.flatMap((answer, index) => (!answer.ok || answer.status >= 400 ? [`${new URL(own[index]).pathname} (${answer.status || answer.error})`] : []));
+      if (gone.length) add("fail", "llms-links", `/llms.txt lists ${plural(gone.length, "address", "addresses")} that ${gone.length === 1 ? "does" : "do"} not answer`, `${gone.join(", ")}. Generate the file from the same list as the pages, so it cannot go stale.`);
+      add("ok", "llms", `/llms.txt has a title and ${plural(hrefs.length, "link")}${own.length && !gone.length ? ` (${own.length} followed, all answer)` : ""}`);
+    }
   }
 
-  // A Markdown version of the home page
-  const markdown = await get(home, { accept: "text/markdown", timeout });
-  if (markdown.ok && markdown.status === 200 && markdown.type.includes("text/markdown")) {
-    const varies = /accept/i.test(markdown.headers.get("vary") ?? "");
-    add(varies ? "ok" : "warn", "markdown", "The home page comes back as Markdown when asked", varies ? "" : "Add the header `Vary: Accept`, or a cache may hand the Markdown to a browser.");
-  } else add("warn", "markdown", "The home page has no Markdown version", "A request with `Accept: text/markdown` still gets HTML. Agents read Markdown faster and cheaper. Use the host's own feature if it has one, otherwise a small route (docs/rules/web.md).");
+  // A Markdown version of the home page, reached two ways: by asking, and at an address of its own.
+  const asked = await get(home, { accept: "text/markdown", timeout });
+  const whenAsked = asked.ok && asked.status === 200 && asked.type.includes("text/markdown");
+  const varies = /accept/i.test(asked.headers.get("vary") ?? "");
+  const homePath = new URL(home).pathname;
+  const address = markdownLink || (homePath.endsWith("/") ? `${homePath}index.md` : `${homePath}.md`);
+  let byAddress = false;
+  if (toUrl(address, home)) {
+    const file = await get(toUrl(address, home), { accept: "text/markdown,text/plain;q=0.8,*/*;q=0.5", timeout });
+    byAddress = file.ok && file.status === 200 && !looksLikePage(file);
+  }
+  const vary = "Add the header `Vary: Accept` to the page, or a cache may hand the Markdown to a browser.";
+  if (whenAsked && byAddress) add(varies ? "ok" : "warn", "markdown", `The home page has a Markdown version, when asked and at ${address}`, varies ? "" : vary);
+  else if (whenAsked) add("warn", "markdown", "The home page comes back as Markdown when asked, but has no .md address", `Nothing at ${address}. Some agents only try the address: serve the same Markdown there, and point to it with <link rel="alternate" type="text/markdown">.${varies ? "" : ` ${vary}`}`);
+  else if (byAddress) add("warn", "markdown", `The home page has a Markdown version at ${address}, but not when asked`, "A request for the page itself with `Accept: text/markdown` still gets HTML. Answer it with the same Markdown, and send `Vary: Accept`.");
+  else add("warn", "markdown", "The home page has no Markdown version", "A request with `Accept: text/markdown` still gets HTML, and there is no .md address. Agents read Markdown faster and cheaper. Use the host's own feature if it has one, otherwise a small route (docs/rules/web.md).");
 }
 
 async function checkLinkHeader(add, origin, homeResponse, timeout) {
@@ -328,7 +360,7 @@ export async function checkSite(site, { pages = [], apis = [], isPublic = true, 
   }
   await checkNotFound(add, origin, timeout);
   if (isPublic) {
-    await checkPublicFiles(add, origin, home.href, timeout);
+    await checkPublicFiles(add, origin, home.href, homeResponse?.page?.markdownLink, timeout);
     await checkLinkHeader(add, origin, homeResponse, timeout);
   }
   for (const route of apis) await checkApi(add, origin, route, timeout);

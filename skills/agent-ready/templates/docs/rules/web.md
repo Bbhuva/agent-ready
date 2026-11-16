@@ -21,10 +21,11 @@ This is ordinary good HTML. It is also what Lighthouse's Agentic Browsing audits
 3. **Every control has a name a program can read:** visible text, a `<label for>`, or an `aria-label` on an icon-only button. Inputs carry `name`, `type` and `autocomplete`. Nothing a person can click is hidden from the accessibility tree by `aria-hidden` or a role that doesn't fit.
 4. **Every state has an address.** A filter, a tab, a page of results or an opened record changes the URL, so an agent can link to it, reload it and go back.
 5. **Nothing jumps.** Give images, videos and embeds a width and height, keep space for content that loads late, and never insert content above what is already on screen. Keep Cumulative Layout Shift under 0.1: a browser agent clicks where the button was.
-6. **Status codes tell the truth.** A missing page is a 404, not a 200 that says "not found". A form error is text next to its field, tied to it with `aria-describedby`, not only a colour or a message that disappears.
+6. **Status codes tell the truth.** A missing page is a 404, not a 200 that says "not found". A form error is text next to its field, tied to it with `aria-describedby`, not only a colour or a message that disappears. A form that worked says so in text, in an element with `role="status"`, so an agent knows the job is done.
 7. **Nothing needs a mouse or good timing.** No action exists only on hover or by dragging. A step that cannot be undone (delete, pay, send) asks first, in a dialog with clearly named buttons.
 8. **Say what the page is.** A `<title>`, a meta description and a canonical link on every public page, and JSON-LD for the thing it is about: a product, an article, an event, the organisation.
-9. **No human check in front of reading.** Keep CAPTCHAs for sign-up, sign-in and anything that costs money. Protect the rest with rate limits.
+9. **The facts are in the text.** What an agent is sent to find out (what this is, what it costs, where it is offered, opening hours, how to get in touch) is in the page's visible text, and again in the JSON-LD, and the two agree. Never only in an image, a slider or the markup: most tools that fetch a page drop its scripts, JSON-LD included.
+10. **Nothing stands in front of reading.** Keep CAPTCHAs for sign-up, sign-in and anything that costs money, and protect the rest with rate limits. No pop-up covers the content when a page opens, and a cookie banner never blocks reading or clicking.
 
 ## Public pages (every public site)
 
@@ -34,9 +35,11 @@ Generate these at build time from the same list of routes or content as the page
 | --- | --- |
 | `/robots.txt` as `text/plain` | Rules under `User-agent: *`, a `Disallow` for the signed-in app, admin, API and search-result paths, the crawler policy below, and a `Sitemap:` line |
 | `/sitemap.xml` | The canonical address of every public page, and nothing behind sign-in |
-| `/llms.txt` | Markdown: `# Name`, a one-line `>` summary, then `##` sections of links to the pages that matter most, each with a few words on what it holds. It must contain links, not only text |
-| A Markdown version of each content page | A request with `Accept: text/markdown` gets the same content back as `Content-Type: text/markdown`, with `Vary: Accept`. HTML stays the default. Use the host's own feature if it has one, otherwise a small route or middleware. Point to it with `<link rel="alternate" type="text/markdown">` |
-| `Link` headers on the home page | Pointers to what exists, and only that: `</llms.txt>; rel="describedby"`, and for an API `</.well-known/api-catalog>; rel="api-catalog"` |
+| `/llms.txt` | Markdown: `# Name`, a one-line `>` summary, then `##` sections of links to the pages that matter most, each with a few words on what it holds. It must contain links, not only text, and every link must work |
+| A Markdown version of each content page | One copy, made from the page's own content, reached two ways: at the page's address with `.md` added, and at the page's own address for a request with `Accept: text/markdown`. Both answer as `Content-Type: text/markdown`, and the second sends `Vary: Accept` so a cache keeps the two apart. HTML stays the default. It says what the page says, never something else. Use the host's own feature if it has one, otherwise a small route or middleware. Point to the `.md` address with `<link rel="alternate" type="text/markdown">` |
+| `Link` headers on the home page | Pointers to what exists, and only that: `</llms.txt>; rel="describedby"`, and for an API `</.well-known/api-catalog>; rel="api-catalog"`. On a host that cannot send headers, use `<link rel="describedby" href="/llms.txt">` in the page's head |
+
+**A site that sells or takes bookings** has a path of plain links from the home page to buying or booking, and its policies (returns, shipping or cancelling, privacy, terms) as pages linked from every page's footer. An agent that cannot find them guesses, or goes elsewhere.
 
 **The crawler policy is the operator's decision.** Ask once, in plain words, and log the answer in `docs/build/decisions.md`. There are three kinds of AI crawler, and each can be treated differently:
 
@@ -50,7 +53,7 @@ Until the operator answers, allow the first two and say no to training, logged a
 Content-Signal: search=yes, ai-input=yes, ai-train=no
 ```
 
-`robots.txt` is a request, not a lock. Anything private needs sign-in, as `docs/security.md` says.
+`robots.txt` is a request, not a lock. Anything private needs sign-in, as `docs/security.md` says. It is also not the only gate: a host or CDN can block AI crawlers by its own settings, whatever `robots.txt` says. Before launch, check that those settings match the policy.
 
 ## An API (when the project has one)
 
@@ -92,6 +95,7 @@ WebMCP lets a page tell a browser agent what it can do, so the agent calls a nam
 
 Scanners also look for the files below. A missing one is not a bug. Add one only when the operator wants what it does, and log why in `docs/build/decisions.md`:
 
+- `/llms-full.txt`: the full text of every content page in one file, for a documentation site.
 - An A2A agent card (`/.well-known/agent-card.json`): the product is itself an agent that other agents talk to.
 - An agent skills index (`/.well-known/agent-skills/index.json`): the project publishes skills for coding agents.
 - An ARD catalogue (`/.well-known/ard.json`; older tools read `ai-catalog.json`): there are several MCP servers, agents or skills to list.
@@ -111,12 +115,13 @@ It checks the rows below, apart from the last. To check one by hand (in Windows 
 | --- | --- | --- |
 | Content without JavaScript | `curl -s <page>` | The main heading and the text are in the output |
 | Root files | `curl -sI <site>/robots.txt`, then `/sitemap.xml` and `/llms.txt` | Each is a 200 with the right content type |
-| Markdown version | `curl -si -H "Accept: text/markdown" <page>` | The headers say `Content-Type: text/markdown`, and the body is the page's text |
+| Markdown version | `curl -si -H "Accept: text/markdown" <page>`, then `curl -si <page>.md` | Both say `Content-Type: text/markdown`, and the body is the page's text |
+| Links in `llms.txt` | `curl -sI` on each address it lists | Every one is a 200 |
 | Pointers | `curl -sI <site>/` | The `Link` header names only files that exist |
 | The API without a token | `curl -i <api route>` | A 401 in JSON with `WWW-Authenticate`, not a page or a redirect |
 | Names, order and layout, after JavaScript has run | An accessibility check in a browser, and Lighthouse's Agentic Browsing audits (Chrome 150 or newer) | No control without a name, and no layout shift |
 
-Once the site is public, two scanners grade it from outside: isitagentready.com (levels 0 to 5) and PageSpeed Insights (the same Lighthouse audits). Scan only an address that is already public. Aim for level 3 on a content site, and level 4 once there is an API catalogue or an MCP server. Anything higher needs the files in "Not by default".
+Once the site is public, three scanners grade it from outside: isitagentready.com (levels 0 to 5), PageSpeed Insights (the same Lighthouse audits) and elementor.com/checker (find, read and act, for any public site). Scan only an address that is already public. Aim for level 3 on a content site, and level 4 once there is an API catalogue or an MCP server. Anything higher needs the files in "Not by default".
 
 ## In the plan
 

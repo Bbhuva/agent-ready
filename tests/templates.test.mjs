@@ -71,7 +71,7 @@ test("every doc in the rules table of AGENTS.md exists", () => {
 test("the rules for visiting agents ship, are wired in, and stay optional", () => {
   const web = read(path.join(templates, "docs", "rules", "web.md"));
   for (const part of ["Every page", "Public pages", "An API", "Behind sign-in", "Not by default", "How to check"]) assert.match(web, new RegExp(`^## ${part}`, "m"), part);
-  for (const name of ["robots.txt", "sitemap.xml", "llms.txt", "text/markdown", "oauth-protected-resource", "WWW-Authenticate"]) assert.ok(web.includes(name), `web.md should cover ${name}`);
+  for (const name of ["robots.txt", "sitemap.xml", "llms.txt", "text/markdown", "`.md` added", "The facts are in the text", "sells or takes bookings", "oauth-protected-resource", "WWW-Authenticate"]) assert.ok(web.includes(name), `web.md should cover ${name}`);
   const agents = read(path.join(templates, "AGENTS.md"));
   assert.ok(docRefs(agents.slice(agents.indexOf("## Load only when you need it"), agents.indexOf("## Commands"))).includes("docs/rules/web.md"), "the map points at it");
   const launch = read(path.join(templates, "docs", "operator", "launch.md"));

@@ -43,12 +43,14 @@ This is a reminder list, not legal advice. Check what applies where your users l
 People now ask AI assistants to find, read and use sites for them. The rules agents follow are in `docs/rules/web.md`.
 
 - [ ] Every public page shows its text without JavaScript, and every button and form field has a name a program can read.
-- [ ] The live site serves `robots.txt`, a sitemap and `llms.txt`, and they list only public pages.
+- [ ] What people ask an assistant about you (what you offer, prices, where you serve, opening hours, how to reach you) is written as text on the page, not only shown in a picture.
+- [ ] The live site serves `robots.txt`, a sitemap and `llms.txt`, and they list only public pages that still exist.
 - [ ] You have decided whether AI search may quote your pages and whether AI companies may train on them, and `robots.txt` says so.
+- [ ] The bot settings at your host and CDN match that decision. Some block AI crawlers unless you switch it off.
 - [ ] Everything private is behind sign-in, not only left out of `robots.txt`.
 - [ ] If other tools connect to it (an API, an MCP server), they sign in with a permission of their own that you can withdraw, never with someone's password.
 - [ ] `/ar-web` with the live address shows nothing to fix.
-- [ ] A scan of the live address (isitagentready.com, and "Agentic browsing" in PageSpeed Insights) shows nothing missing that `docs/rules/web.md` asks for.
+- [ ] A scan of the live address (isitagentready.com, elementor.com/checker, and "Agentic browsing" in PageSpeed Insights) shows nothing missing that `docs/rules/web.md` asks for.
 
 ## After launch
 

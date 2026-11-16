@@ -10,6 +10,6 @@ Check how the product looks to a visiting AI agent. The operator's words: $ARGUM
 4. Fix each FIX line as `docs/rules/web.md` says. A small fix in a page you are already working on: do it now. Anything bigger becomes an item in `docs/build/backlog.md`. For each LOOK line, say what it means, and fix it only if it fits this project.
 5. Who may crawl the site is the operator's decision. If `robots.txt` does not say yet, ask in plain words, and log the answer in `docs/build/decisions.md`.
 6. The script reads the HTML as sent, so it cannot see what JavaScript adds later. For the main screens, also run the stack's accessibility check in a browser, if it has one.
-7. Once the site is live, name the two outside scanners they can try themselves: isitagentready.com and PageSpeed Insights. A missing draft standard there is not a bug: see "Not by default" in `docs/rules/web.md`.
+7. Once the site is live, name the three outside scanners they can try themselves: isitagentready.com, elementor.com/checker and PageSpeed Insights. A missing draft standard there is not a bug: see "Not by default" in `docs/rules/web.md`.
 
 Finish with the "Web check" line from the end of the report.

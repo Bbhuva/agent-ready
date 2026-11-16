@@ -2,6 +2,25 @@
 
 Newest first. `/ar-update` shows the entries between your version and the new one. Its tool files (the guards, the scripts and the commands) are updated for you. Your documents never are: each "For your documents" list below is what an agent offers to change in them, one edit at a time, for your yes.
 
+## 1.1.1 (2026-11-17)
+
+More of what a visiting AI agent needs, after reading what Elementor's Agent Ready checks for.
+
+- **The facts are in the text:** what an assistant is sent to find out (what you offer, prices, where you serve, opening hours, how to reach you) is written on the page and repeated in its structured data, never only in a picture or a slider.
+- **A clear way to buy or book:** a site that sells or takes bookings has plain links from the home page to doing so, and its policies (returns, shipping, privacy, terms) linked from every page.
+- **Markdown two ways:** each content page's Markdown version now also has an address of its own, the page's address with `.md` added, because some agents only try that.
+- **Nothing in the way:** no pop-up covers a page when it opens, a cookie banner never blocks reading, and a form that worked says so in words.
+- **`/ar-web` checks more:** it follows the links in `llms.txt` and reports any that are gone, looks for the `.md` address, and reports structured data that is broken.
+- **Before going live:** the launch list asks you to check your host's and CDN's bot settings, which can block AI crawlers whatever `robots.txt` says. It also names a third outside scanner, elementor.com/checker.
+
+### For your documents
+
+Only if this project has `docs/rules/web.md`. Otherwise there is nothing to change.
+
+- `docs/rules/web.md`: in "Every page", add the success message to rule 6, add rule 9 "The facts are in the text", and widen the last rule to pop-ups and cookie banners. In "Public pages", the Markdown row gains the `.md` address, the `llms.txt` row says every link must work, and there is a new paragraph for a site that sells or takes bookings. The crawler policy mentions the host's and CDN's bot settings. "How to check" names the third scanner.
+- `docs/operator/launch.md`: add the two new lines to "Ready for AI assistants" (facts written as text, bot settings at the host and CDN), and name elementor.com/checker in the last one.
+- `docs/build/backlog.md`: run `/ar-web` again and offer an item for each new FIX line.
+
 ## 1.1.0 (2026-11-16)
 
 Sites and apps that AI assistants can read and use.

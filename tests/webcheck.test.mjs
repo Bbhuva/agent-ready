@@ -56,6 +56,7 @@ const goodSite = {
     (request.headers.accept ?? "").includes("text/markdown")
       ? { type: "text/markdown; charset=utf-8", headers: { vary: "Accept" }, body: `# Corner Bakery\n\n${WORDS}\n` }
       : { type: "text/html; charset=utf-8", headers: { link: '</llms.txt>; rel="describedby"', vary: "Accept" }, body: GOOD_PAGE },
+  "/index.md": { type: "text/markdown; charset=utf-8", body: `# Corner Bakery\n\n${WORDS}\n` },
   "/menu": { body: GOOD_PAGE.replace("<h1>Corner Bakery</h1>", "<h1>Menu</h1>") },
   "/robots.txt": { type: "text/plain", body: (origin) => `User-agent: *\nAllow: /\nDisallow: /api/\nContent-Signal: search=yes, ai-input=yes, ai-train=no\n\nUser-agent: GPTBot\nDisallow: /\n\nSitemap: ${origin}/sitemap.xml\n` },
   "/sitemap.xml": { type: "application/xml", body: (origin) => `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url><url><loc>${origin}/menu</loc></url></urlset>` },
@@ -171,7 +172,52 @@ test("a Link header or a discovery file that is broken needs fixing", async () =
     assert.match(link.detail, /\/\.well-known\/api-catalog \(404\)/);
     assert.doesNotMatch(link.detail, /llms\.txt/, "the file that exists is not blamed");
     assert.ok(results.some((r) => r.id === "well-known" && r.status === "fail" && r.title.includes("server-card.json")));
-    assert.equal(results.find((r) => r.id === "markdown").status, "warn", "this home page has no Markdown version");
+    assert.equal(results.find((r) => r.id === "markdown").status, "warn", "this home page never answers in Markdown when asked");
+  });
+});
+
+test("the Markdown version is wanted both ways: when asked, and at an address of its own", async () => {
+  const markdown = async (routes) => (await serve(routes, (origin) => checkSite(origin))).find((r) => r.id === "markdown");
+  const both = await markdown(goodSite);
+  assert.equal(both.status, "ok");
+  assert.match(both.title, /when asked and at \/index\.md/);
+
+  const { "/index.md": _file, ...askedOnly } = goodSite;
+  const asked = await markdown(askedOnly);
+  assert.equal(asked.status, "warn");
+  assert.match(asked.title, /no \.md address/);
+
+  const addressOnly = await markdown({ ...goodSite, "/": { headers: { link: '</llms.txt>; rel="describedby"' }, body: GOOD_PAGE } });
+  assert.equal(addressOnly.status, "warn");
+  assert.match(addressOnly.title, /at \/index\.md, but not when asked/);
+
+  // Without a <link rel="alternate"> the address is guessed, and a page sent for every address is not Markdown.
+  const none = await markdown({ ...askedOnly, "/": { body: GOOD_PAGE.replace(/<link rel="alternate"[^>]*>/, "") }, "*": { body: GOOD_PAGE } });
+  assert.equal(none.status, "warn");
+  assert.match(none.title, /no Markdown version/);
+});
+
+test("llms.txt links that go nowhere, and JSON-LD that does not parse, need fixing", async () => {
+  const routes = {
+    ...goodSite,
+    "/": { headers: { link: '</llms.txt>; rel="describedby"' }, body: GOOD_PAGE.replace('{"@type":"Bakery","name":"Corner Bakery"}', '{"@type":"Bakery", name: Corner Bakery}') },
+    "/llms.txt": { type: "text/plain", body: "# Corner Bakery\n\n> Fresh bread.\n\n- [Menu](/menu): what we bake\n- [Old offers](/offers-2024): gone\n- [Our supplier](https://mill.example/flour): another site, not followed\n" },
+  };
+  await serve(routes, async (origin) => {
+    const results = await checkSite(origin);
+    const links = results.find((r) => r.id === "llms-links");
+    assert.equal(links.status, "fail");
+    assert.match(links.title, /lists 1 address that does not answer/);
+    assert.match(links.detail, /\/offers-2024 \(404\)/);
+    assert.doesNotMatch(links.detail, /menu|mill\.example/);
+    const data = results.find((r) => r.id === "page-data");
+    assert.equal(data.status, "fail");
+    assert.match(data.title, /JSON-LD that is not valid JSON/);
+  });
+  await serve(goodSite, async (origin) => {
+    const results = await checkSite(origin);
+    assert.match(results.find((r) => r.id === "llms").title, /1 link \(1 followed, all answer\)/);
+    assert.ok(!results.some((r) => r.id === "llms-links" || r.id === "page-data"));
   });
 });
 
